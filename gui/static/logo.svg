@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- wp8f logo：涡喷发动机正面（8 片压气机叶片 = WP8F / 涡喷-8F 的呼应）。
+     无底透明：只有机匣环、叶片、轮毂三样，浅薄荷配色。
+     本文件由 scripts/make_icon.py 生成 —— 改图形请改脚本里的几何常量再重新生成，
+     直接手改这里会在下一次生成时被覆盖。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="wp8f">
+  <title>wp8f</title>
+  <desc>War Thunder Port 8111 Frontend —— 涡喷发动机正面视图：机匣、8 片压气机叶片、轮毂。</desc>
+  <circle cx="128" cy="128" r="100" fill="none" stroke="#43D2A5" stroke-width="16"/>
+    <polygon points="125.04,94.13 130.96,94.13 160.25,43.98 132.71,38.12" fill="#A6EFD5"/>
+    <polygon points="149.85,101.95 154.05,106.15 210.22,91.39 194.88,67.78" fill="#A6EFD5"/>
+    <polygon points="161.87,125.04 161.87,130.96 212.02,160.25 217.88,132.71" fill="#A6EFD5"/>
+    <polygon points="154.05,149.85 149.85,154.05 164.61,210.22 188.22,194.88" fill="#A6EFD5"/>
+    <polygon points="130.96,161.87 125.04,161.87 95.75,212.02 123.29,217.88" fill="#A6EFD5"/>
+    <polygon points="106.15,154.05 101.95,149.85 45.78,164.61 61.12,188.22" fill="#A6EFD5"/>
+    <polygon points="94.13,130.96 94.13,125.04 43.98,95.75 38.12,123.29" fill="#A6EFD5"/>
+    <polygon points="101.95,106.15 106.15,101.95 91.39,45.78 67.78,61.12" fill="#A6EFD5"/>
+  <circle cx="128" cy="128" r="26" fill="none" stroke="#43D2A5" stroke-width="15"/>
+</svg>

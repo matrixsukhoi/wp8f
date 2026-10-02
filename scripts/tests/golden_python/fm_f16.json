@@ -1,0 +1,207 @@
+{
+ "__status__": 200,
+ "body": {
+  "aircraft": "f_16c_block_50",
+  "engine_type": "Jet",
+  "is_jet": true,
+  "has_wep": true,
+  "empty_weight": 9031,
+  "empty_flight_weight": 9237,
+  "max_fuel": 6398,
+  "takeoff_weight_50": 12230,
+  "takeoff_weight": 12230,
+  "fuel_pct": 50.0,
+  "extra_weight": 0.0,
+  "vne": 1555,
+  "vne_mach": 2.2,
+  "wingspan": 9.4,
+  "wing_area": 28.4,
+  "aspect_ratio": 3.14,
+  "thrust_max": 7030,
+  "engine_power": 0,
+  "aoa_crit_no_flaps": 29.0,
+  "aoa_crit_full_flaps": 29.0,
+  "load_limit_neg": -5.67,
+  "load_limit_pos": 11.84,
+  "weight": {
+   "empty": 9031,
+   "oil": 30,
+   "nitro": 0,
+   "pilot": 90,
+   "ammo": 51,
+   "cm": 35,
+   "external": 0,
+   "empty_flight": 9237
+  },
+  "power": {
+   "mil": 0,
+   "wep": 0,
+   "tw_mil": 0.78
+  },
+  "load_factor": {
+   "empty": [
+    -8.03,
+    16.38
+   ],
+   "full": [
+    -4.22,
+    9.04
+   ],
+   "current": [
+    -5.67,
+    11.84
+   ]
+  },
+  "limits": {
+   "vne": 1555,
+   "vne_mach": 2.2,
+   "ias_warn": 1477,
+   "mach_warn": 2.09
+  },
+  "parts": {
+   "wing": {
+    "angle": 1.0,
+    "area": 28.4,
+    "ar": 3.14,
+    "base": {
+     "cd_min": 0.0069,
+     "cl0": 0.06,
+     "aoa_crit": [
+      -20.0,
+      29.0
+     ],
+     "cl_crit": [
+      -0.7,
+      1.75
+     ],
+     "cl_slope": 0.0583,
+     "oswalds": 0.7,
+     "best_ld": [
+      2.5,
+      0.21,
+      0.013,
+      15.8
+     ],
+     "crit_neg": [
+      -20.0,
+      -1.11,
+      0.184,
+      -6.01
+     ],
+     "crit_pos": [
+      29.0,
+      1.75,
+      0.451,
+      3.88
+     ]
+    },
+    "flaps": {
+     "cd_min": 0.033,
+     "cl0": 0.3,
+     "aoa_crit": [
+      -20.0,
+      29.0
+     ],
+     "cl_crit": [
+      -0.45,
+      1.95
+     ],
+     "cl_slope": 0.0569,
+     "oswalds": 0.65,
+     "best_ld": [
+      3.0,
+      0.47,
+      0.068,
+      7.0
+     ],
+     "crit_neg": [
+      -20.0,
+      -0.84,
+      0.143,
+      -5.88
+     ],
+     "crit_pos": [
+      29.0,
+      1.95,
+      0.626,
+      3.11
+     ]
+    }
+   },
+   "fuselage": {
+    "angle": 0.0,
+    "area": 27.5,
+    "ar": 3.24,
+    "base": {
+     "cd_min": 0.0068,
+     "cl0": 0.0,
+     "aoa_crit": [
+      -21.0,
+      21.0
+     ],
+     "cl_crit": [
+      -0.15,
+      0.15
+     ],
+     "cl_slope": 0.0071,
+     "oswalds": 0.5,
+     "best_ld": [
+      21.0,
+      0.15,
+      0.011,
+      13.4
+     ],
+     "crit_neg": [
+      -21.0,
+      -0.15,
+      0.011,
+      -13.37
+     ],
+     "crit_pos": [
+      21.0,
+      0.15,
+      0.011,
+      13.37
+     ]
+    }
+   },
+   "hor_stab": {
+    "angle": 0.0,
+    "area": 5.94,
+    "ar": 5.34,
+    "base": {
+     "cd_min": 0.007,
+     "cl0": 0.01,
+     "aoa_crit": [
+      -29.0,
+      29.0
+     ],
+     "cl_crit": [
+      -1.25,
+      1.25
+     ],
+     "cl_slope": 0.0428,
+     "oswalds": 0.75,
+     "best_ld": [
+      6.5,
+      0.29,
+      0.014,
+      21.2
+     ],
+     "crit_neg": [
+      -29.0,
+      -1.23,
+      0.127,
+      -9.66
+     ],
+     "crit_pos": [
+      29.0,
+      1.25,
+      0.131,
+      9.52
+     ]
+    }
+   }
+  }
+ }
+}

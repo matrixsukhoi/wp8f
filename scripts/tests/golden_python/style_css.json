@@ -1,0 +1,6 @@
+{
+ "__status__": 200,
+ "text_len": 20957,
+ "head": "/* wp8f 控制台 —— VoidMei 风格：素雅浅色、极简、紧凑网格、On/Off 滑块、纯文字按钮 */\n:root {\n  --bg: #f7f7f4;\n  --fg: #1c1c1c;\n  --line: #b9b9b4;\n  --line-soft: #d8d8d3;\n  --muted: #8c8c86;\n  --accent: #1c1c1c;\n  --field: #fdfdfb;\n}\n* { box-sizing: border-box; margin: 0; padding: 0; }\nhtml, body { height: 100%; }\nbody {\n  background: var(--bg);\n  color: var(--fg);\n  font: 14px/1.7 \"Sarasa Mono SC\", \"Microsoft YaHei\", \"SimSu",
+ "is_html": false
+}

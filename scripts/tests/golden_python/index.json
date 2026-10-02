@@ -1,0 +1,6 @@
+{
+ "__status__": 200,
+ "text_len": 5530,
+ "head": "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>wp8f 控制台</title>\n  <link rel=\"stylesheet\" href=\"/static/style.css?v=19\">\n</head>\n<body>\n  <div class=\"main\">\n    <!-- 左侧导航 -->\n    <aside class=\"nav\" id=\"tabs\">\n      <button class=\"tab active\" data-tab=\"config\">配置器</button>\n      <button class=\"tab\"",
+ "is_html": true
+}

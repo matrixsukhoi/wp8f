@@ -1,0 +1,45 @@
+wp8f
+*.exe
+*.zip
+# 可执行文件目录（S1 布局）：仓库根只留 wp8f-gui.exe（*.exe 已忽略），
+# wp8f.exe / flightmodel.exe / test-server.exe 与 Linux 构建的 wp8f、flightmodel
+# 都由 scripts/build.sh 放这里 —— 整层都是产物，不入库。
+/binary/
+target/
+logs/
+# 根 Cargo.lock 需要入库；成员 crate 各自生成的 lock 只保留根那份（曾提交过一批引用了
+# 早已并入/改名 crate 的陈旧 lock，已删除，这里防止它们再被误提交）
+/*/Cargo.lock
+# 飞机性能数据是用户本地数据（datamine 产物），不入库。
+# 旧路径规则各留一行，兼容还没搬的本地检出（整层忽略见下面的 `/resource/*`）：
+resource/data/aces/
+resource/data/aces/*
+resource/fm/data/aces/
+resource/fm/data/aces/*
+flightmodel/data/aces/
+flightmodel/data/aces/*
+# resource/ 只入库两个目录：lang（HUD 标签表）与 i18n（界面语言 15 种）。
+# 其余全是**本地资源**，不入库（外部克隆需自备）：
+#   fonts/            字体（HUD 缺字体直接报错退出；打包脚本只带随包那三份）
+#   voice/            语音包（音源许可不明）
+#   data/             飞机性能数据（上游 War-Thunder-Datamine 无许可证，约 540 MB）
+#   data_new/ data_old/ .wp8f_update_tmp/   更新器的暂存与回滚目录
+/resource/*
+!/resource/lang/
+!/resource/i18n/
+
+# 本地参考资料检出与开发文档：不入库（外部克隆不需要它们，代码注释里的出处路径失去本地对照而已）
+/3rdparty/
+/docs/
+
+# Python 字节码
+__pycache__/
+*.pyc
+
+# WebView2 运行时用户数据（代码里已改到 logs/webview2-data）
+*.WebView2/
+
+# 构建中间产物（无扩展名的中间文件）
+.tmp_*.csv
+flightmodel/*_em*.txt
+flightmodel/*_em*.png

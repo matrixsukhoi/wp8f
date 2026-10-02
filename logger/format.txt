@@ -1,0 +1,53 @@
+Even if other units may be recognized and supported by Tacview, your data should be always stored in the metric system, and angles expressed in degrees. Here is the list of data (columns headers) supported:
+
+Time: Time expressed in either Coordinated Universal UTC YYYY-MM-DDThh:mm:ssZ time format, or the offset in seconds since the beginning of the flight
+Longitude: Longitude in degrees (negative for west, positive for east)
+Latitude: Latitude in degrees (negative for south, positive for north)
+Altitude: ASL altitude in meters
+Roll (deg): Roll in degrees (clockwise orientation: positive when rolling to the right, negative to the left)
+Pitch (deg): Pitch in degrees (positive when the aircraft is pointing to the sky, negative when pointing to the ground)
+Yaw (deg): Orientation in degrees relative to the true north
+Q16: Which separators should I use for the columns?
+Tacview smartly detects the separators used in your .csv files. However, for best results it is suggested to stick to the following convention:
+
+Coma , to separate data
+Point . for decimal numbers mark
+Double quotes " surrounding strings containing comas
+Here is an example of a properly formatted file:
+
+Time,Longitude,Latitude,Altitude,Roll (deg),Pitch (deg),Yaw (deg)
+0.00,-116.6847222,32.72722222,34,-0.11536,-0.14832,295.76
+4.00,-116.6847222,32.72722222,34,0.36255,-0.26917,295.25
+8.00,-116.685,32.72722222,35,0.42297,-0.2417,297.27
+Officially Supported Fields
+Here is the list of csv fields officially supported by Tacview. They can be stored in any order and most of them are optional. Only time and position are mandatory. Aside time, any record can be left blank when its value is equal to the previous record value.
+
+For now, only one aircraft can be described per csv file. Support for several aircraft at the same time will be added in a near future.
+
+Field	Value
+Time	UTC time for the current record. Fraction of second are supported.
+2011-06-02T05:00:47.13Z
+Timestamp	Unix time stamp for the current record. Relative to 1970-01-01T00:00:00Z expressed in seconds and fraction of second. This is an alternate way to specify each time record.
+1306990847.13
+Longitude	Object longitude in degrees (positive toward the east).
+41.625130740936
+Latitude	Object latitude in degrees (positive toward the north).
+41.591041652197
+Altitude	Object altitude in meters MSL (above sea level, also known as ASL in some countries).
+2000.14
+Roll	Roll in degrees (Positive when tilting the aircraft to turn to the right).
+-4.2
+Pitch	Pitch in degrees (positive when climbing).
+7.10001
+Yaw	Yaw (heading) in degrees relative to the true north.
+312.2
+AOA	Angle of attack
+4.6
+TAS	True airspeed (m/s)
+157.7
+CAS	Calibrated airspeed (m/s)
+139.1
+IAS	Indicated airspeed (m/s)
+137.3
+Mach	Mach number
+0.5

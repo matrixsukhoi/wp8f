@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh_simp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="app.title">wp8f 控制台</title>
+  <!-- favicon：与 exe/托盘同一个涡喷 logo（scripts/make_icon.py 生成的同名副本） -->
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <!-- 更新器面板（P3）的样式：单独一份，不与 style.css 的整页样式互相牵连 -->
+  <link rel="stylesheet" href="/static/update.css">
+</head>
+<body>
+  <div class="main">
+    <!-- 左侧导航 -->
+    <aside class="nav" id="tabs">
+      <div class="brand"><span data-i18n="app.title">wp8f 控制台</span><small data-i18n="app.brand_sub">HUD 工具台</small></div>
+      <button class="tab active" data-tab="config" data-i18n="nav.config">配置器</button>
+      <button class="tab" data-tab="fm" data-i18n="nav.fm">飞行模型</button>
+      <button class="tab" data-tab="replay" data-i18n="nav.replay">回放</button>
+      <button class="tab" data-tab="missile" data-i18n="nav.missile">导弹模拟</button>
+      <!-- 语言下拉：`auto` = 跟随系统；改动会同时写回当前配置的 language 键（HUD/后端读的是它），
+           界面本身即时生效（重新取一次文案表 + 重渲染配置器），见 app.js 的 setUiLang。
+           放在侧栏底部（margin-top:auto）：配置文件卡片区的高度因此完全不变。 -->
+      <div class="lang">
+        <label for="lang-select" data-i18n="app.lang">语言</label>
+        <select id="lang-select"></select>
+      </div>
+    </aside>
+
+    <!-- 内容 -->
+    <section class="content">
+
+      <!-- ============ 配置器 ============ -->
+      <div id="tab-config" class="panel active">
+        <!-- 卡片网格：#config-form 用 display:contents，让 JS 生成的卡片与"配置文件"同排流动；
+             短卡片（TacView）与工具卡片成对，整页刚好一屏 -->
+        <div class="cfg-grid">
+          <div class="card">
+            <h3 data-i18n="cfg.card.file">配置文件</h3>
+            <div class="grid inline">
+              <div class="item"><label data-i18n="cfg.select_config">选择配置</label><select id="config-select"></select></div>
+              <div class="item"><button class="tbtn boxed" id="json-toggle" data-i18n="cfg.edit_json">编 辑 配 置 J S O N</button></div>
+            </div>
+            <textarea id="config-json" spellcheck="false" hidden></textarea>
+          </div>
+
+          <div id="config-form"></div>
+        </div>
+      </div>
+
+      <!-- ============ FM ============ -->
+      <div id="tab-fm" class="panel">
+        <div class="sec"><span data-i18n="fm.sec.params">机型与计算参数</span><span id="fm-version" class="sec-note"></span></div>
+        <div class="grid">
+          <div class="item"><label data-i18n="fm.select_aircraft">选择机型</label><select id="fm-aircraft"></select></div>
+          <div class="item"><button class="tbtn boxed" id="fm-compare" data-i18n="fm.add_compare">加 入 对 比</button><button class="tbtn boxed" id="fm-compare-clear" data-i18n="fm.clear_compare">清 空 对 比</button></div>
+          <div class="item full">
+            <label><span data-i18n="fm.fuel_ratio">燃油比例</span> <b id="fm-fuel-val">50%</b></label>
+            <input type="range" id="fm-fuel" min="0" max="100" step="1" value="50" list="fuel-ticks" class="fuel-slider">
+            <label class="gap-l" data-i18n="fm.extra_weight">额外重量 kg</label>
+            <input type="number" id="fm-extra" value="0" step="10" min="0" max="100000">
+          </div>
+        </div>
+        <datalist id="fuel-ticks">
+          <option value="0"></option><option value="25"></option><option value="50"></option>
+          <option value="75"></option><option value="100"></option>
+        </datalist>
+        <div class="split">
+          <div class="col">
+            <div class="sec" data-i18n="fm.sec.info">机型信息（分组卡片）</div>
+            <div id="fm-info" class="grid">
+            <div class="empty"><span class="ico">✈</span><span class="tip" data-i18n="fm.empty_info">选择机型后显示分组信息</span></div>
+          </div>
+          </div>
+          <div class="col">
+            <div class="sec" data-i18n="fm.chart.cl">CL-α 极曲线</div>
+            <div id="fm-chart-cl" class="chart"></div>
+            <div class="sec" data-i18n="fm.chart.tasalt">真空速 - 高度（最大平飞 · 当前重量）</div>
+            <div id="fm-chart-tasalt" class="chart"></div>
+            <!-- 活塞机型没有推力数据 —— 这三张图连标题一起隐藏（P9 用户口径，见 fm-charts.js 的
+                 applyFmChartVisibility；喷气机型保持原样） -->
+            <div class="sec" data-i18n="fm.chart.thrust_tas" data-fm-jet-only>推力 / 功率 - 真空速 TAS（0/4/8km · VNE/MNE 限制）</div>
+            <div id="fm-chart-thrust-tas" class="chart" data-fm-jet-only></div>
+            <div class="sec" data-i18n="fm.chart.thrust_ias" data-fm-jet-only>推力 / 功率 - 表速 IAS（0/4/8km · 右缘 = VNE）</div>
+            <div id="fm-chart-thrust-ias" class="chart" data-fm-jet-only></div>
+            <div class="sec" data-i18n="fm.chart.power">活塞功率 - 高度（0–20km，Mil / WEP）</div>
+            <div id="fm-chart-power" class="chart"></div>
+            <!-- EM 能量机动图（只喷气机有 EM 数据；画法照 scripts/plot_flight_model.py 的 plot_em） -->
+            <div class="sec" data-i18n="fm.chart.em" data-fm-jet-only>EM 能量机动图（Ps · 瞬时/持续盘旋）</div>
+            <div class="row" data-fm-jet-only>
+              <label class="lbl" for="fm-em-alt" data-i18n="fm.em.alt">高度</label>
+              <select id="fm-em-alt" class="cfg-sel"></select>
+            </div>
+            <div id="fm-chart-em" class="chart" data-fm-jet-only></div>
+            <div class="sec" data-i18n="fm.chart.3d" data-fm-jet-only>推力 3D 曲面（速度 × 高度，可旋转缩放）</div>
+            <div id="fm-chart-3d" class="chart chart3d" data-fm-jet-only></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Replay ============ -->
+      <!-- 注意：回放页签里 **JS 会重写的** 容器（#rp-files / #rp-objects / #rp-telemetry /
+           #rp-ground-note / #rp-ground-res-note / #rp-chart）不加 data-i18n —— 否则切一次语言
+           就会把它们盖成初始文案。回放页签内部的文案属于 i18n 的第二阶段。 -->
+      <div id="tab-replay" class="panel">
+        <div class="sec" data-i18n="rp.sec.files">回放文件（可多选 · 仅支持 .wpr）</div>
+        <div class="grid">
+          <div class="item">
+            <select id="rp-add"><option value="" data-i18n="rp.select_record">＋ 选择录制文件…</option></select>
+          </div>
+          <div class="item">
+            <button class="tbtn boxed" id="rp-pick" data-i18n="rp.pick_file">选 择 文 件</button>
+            <button class="tbtn" id="rp-clear" data-i18n="common.clear">清 空</button>
+          </div>
+        </div>
+        <input type="file" id="rp-file-input" accept=".wpr" multiple hidden>
+        <div id="rp-files" class="chips"><span class="muted small">尚未加入回放文件</span></div>
+        <div class="sec" data-i18n="rp.sec.play">回放</div>
+        <div class="grid">
+          <div class="item"><button class="tbtn primary" id="rp-play" data-i18n="rp.play">播 放</button></div>
+          <div class="item"><label data-i18n="rp.speed">速度</label>
+            <select id="rp-speed">
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+              <option value="8">8x</option>
+            </select>
+          </div>
+          <div class="item"><label data-i18n="rp.objects">对象</label><span id="rp-objects" class="muted">未加载</span></div>
+          <div class="item"><label data-i18n="rp.view">视野</label>
+            <select id="rp-scale">
+              <option value="10" data-i18n="rp.view.km" data-i18n-vars='{"n":"10"}'>10 × 10 km（跟随）</option>
+              <option value="25" data-i18n="rp.view.km" data-i18n-vars='{"n":"25"}'>25 × 25 km（跟随）</option>
+              <option value="50" selected data-i18n="rp.view.km" data-i18n-vars='{"n":"50"}'>50 × 50 km（跟随）</option>
+              <option value="100" data-i18n="rp.view.km" data-i18n-vars='{"n":"100"}'>100 × 100 km（跟随）</option>
+              <option value="200" data-i18n="rp.view.km" data-i18n-vars='{"n":"200"}'>200 × 200 km（跟随）</option>
+              <option value="0" data-i18n="rp.view.fit">全程自适应</option>
+            </select>
+          </div>
+          <div class="item switch">
+            <input type="checkbox" id="rp-ground" checked>
+            <label for="rp-ground" data-i18n-title="rp.ground.tip" title="底图画在 xoy 底面（z=0）；关掉只留 z=0 网格线"><span data-i18n="rp.ground">xoy 底面</span></label>
+          </div>
+        </div>
+        <!-- 底面底图的来源/退化原因：只有"本记录没带底图"或"底图不可用"时才出现
+             （正常记录留空，不占版面）。记录不带底图 → **不铺底面地图**（只留网格线）。 -->
+        <div id="rp-ground-note" class="muted small" hidden></div>
+        <!-- 底面的实际画法/尺寸（贴的就是记录里的原图 / 一个原图像素多少米 / 多少点 / 多少毫秒）：
+              一直显示 —— 用户一眼能看出"用的是原图，不是压缩过的底图" -->
+        <div id="rp-ground-res-note" class="muted small" hidden></div>
+        <!-- 图例：飞机标记（当前位置点 + 姿态线框）固定亮黄 + 深色描边，与图上的颜色一致；
+              轨迹线、文件标签圆点、右侧遥测左边框仍是**每个对象各自的颜色**（区分谁是谁） -->
+        <div id="rp-marker-legend" class="muted small">
+          <span class="mk-dot"></span><span class="mk-line"></span>
+          <span data-i18n="rp.legend">当前位置与姿态线框（轨迹、遥测按对象配色）</span>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="rp-time" min="0" max="1000" value="0">
+          <div class="time-marks">
+            <span id="rp-clock">00:00.000</span>
+            <span id="rp-total">00:00.000</span>
+          </div>
+        </div>
+        <div class="rp-wrap">
+          <div id="rp-chart"></div>
+          <div id="rp-telemetry" class="rp-telemetry muted">未加载回放</div>
+        </div>
+        <details class="sub" id="rp-convert-box">
+          <summary data-i18n="rp.convert.summary">转换（.wpr → TacView ACMI / TacView CSV / FlatCSV）</summary>
+          <div class="grid">
+            <div class="item"><label data-i18n="rp.convert.format">格式</label>
+              <select id="rp-convert-format">
+                <option value="acmi" selected>TacView / ACMI</option>
+                <option value="csv">TacView / CSV</option>
+                <option value="flat">FlatCSV</option>
+              </select>
+            </div>
+            <div class="item"><label data-i18n="rp.convert.lat">零点纬度</label>
+              <input type="number" id="rp-convert-lat" value="55.7558" step="0.0001" min="-90" max="90">
+            </div>
+            <div class="item"><label data-i18n="rp.convert.lon">零点经度</label>
+              <input type="number" id="rp-convert-lon" value="37.6173" step="0.0001" min="-180" max="180">
+            </div>
+            <div class="item"><button class="tbtn primary" id="rp-convert" data-i18n="rp.convert.run">转 换</button></div>
+          </div>
+          <div class="hint muted small" data-i18n="rp.convert.hint">ACMI / TacView CSV 需要零点经纬度；FlatCSV 不需要。
+            产物可在回放页签里选中。</div>
+        </details>
+      </div>
+
+      <!-- ============ 导弹模拟（git submodule：gui/static/vendor/wt-missile-simulator） ============ -->
+      <div id="tab-missile" class="panel">
+        <div class="ms-bar">
+          <div class="ms-info">
+            <b data-i18n="ms.title">导弹规避战术 3D 仿真</b>
+          </div>
+          <button class="tbtn boxed" id="ms-reload" data-i18n="ms.reload">重 新 加 载</button>
+          <button class="tbtn" id="ms-help" data-i18n="ms.help">操 作 说 明</button>
+        </div>
+        <div id="ms-holder" class="ms-holder">
+          <div class="empty"><span class="ico">🚀</span><span class="tip" data-i18n="ms.not_loaded">模拟器未加载</span></div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- 底部操作条（仅配置器页签显示；保存=自动）
+       左侧状态区：当前配置 + 自动保存结果；右侧按钮固定靠右下角 -->
+  <div class="actionbar">
+    <div class="status">
+      <b class="cfg-now" id="config-current"></b>
+      <span class="msg" id="config-msg"></span>
+    </div>
+    <div class="slot">
+      <label class="tgl" title="命令行调试：wp8f 在自带的命令行窗口里启动（输出打在窗口里，窗口不会自动关）">
+        <input type="checkbox" id="wp8f-console"><span data-i18n="app.console_mode">命令行调试</span>
+      </label>
+    </div>
+    <div class="slot"><button class="tbtn" id="wp8f-drag" data-i18n="app.preview">预 览</button></div>
+    <div class="slot"><button class="tbtn primary" id="wp8f-launch" data-i18n="app.start">开 始</button></div>
+  </div>
+
+  <!-- 右下角浮动提示：拖拽配置会话 -->
+  <div id="toast" class="toast hidden">
+    <div>
+      <div data-i18n="app.previewing">配置预览中</div>
+      <div class="hint" data-i18n="app.esc_hint">在 wp8f 窗口按 ESC 退出配置</div>
+    </div>
+    <button class="close" onclick="document.getElementById('toast').classList.add('hidden')">✕</button>
+  </div>
+
+  <!-- 右下角通知堆栈：notify() 往这里追加（.notify-box 样式见 style.css）
+       曾经的缺失导致 notify() 静默失效 —— 所有右下角提示都不显示 -->
+  <div id="notify" class="notify-box"></div>
+
+  <!-- 静态资源不带版本号：gui/src/api.rs 的 /static/* 与首页都回 no-store, must-revalidate，
+       原先 4 处手抄的 ?v=NN 是冗余的，且每次改版本要同步 4 个地方（漏一处就会混用新旧脚本）
+       —— 拆分后文件更多，这条更值钱：只要别加 ?v=，改哪个文件都不会读到旧缓存。 -->
+  <script src="/static/vendor/echarts.min.js"></script>
+  <script src="/static/vendor/echarts-gl.min.js"></script>
+  <!-- 前端按职责拆成多个 classic script（零构建、无打包器）：它们共享同一个全局作用域，
+       顺序即依赖 —— app.js 是共享工具（含 i18n 的 t()/文案表加载），必须第一个；启动动作推迟到
+       DOMContentLoaded（见 app.js 末尾），所以后面几个文件里的函数那时都已就绪。 -->
+  <script src="/static/app.js"></script>
+  <script src="/static/hud-colors.js"></script>
+  <script src="/static/config-form.js"></script>
+  <script src="/static/fm-charts.js"></script>
+  <script src="/static/replay.js"></script>
+  <script src="/static/missile.js"></script>
+  <!-- 更新器面板（P3）：自己挂载进 #tab-fm，样式与逻辑都在 update.* 两个文件里 -->
+  <script src="/static/update.js"></script>
+</body>
+</html>

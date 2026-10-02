@@ -1,0 +1,22 @@
+[package]
+name = "wp8f-logger"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[features]
+# 默认带 `thread`：core 只用这条路径（记录线程需要 disp 的帧环形缓冲区与最新地图）。
+# 控制台（gui）只用来**读/转换** `.wpr`，用 `default-features = false` 就能只拿 `wpr`
+# 容器，而不会把 disp（winit/softbuffer + 内嵌 26 MB 字体）拖进 wp8f-gui.exe。
+default = ["thread"]
+thread = ["dep:wp8f-disp"]
+# 纯函数转换器（.wpr → ACMI / TacView CSV / FlatCSV）：只有控制台需要
+convert = []
+
+[dependencies]
+# 只有 `thread` feature 需要：`FrameReader`（帧环形缓冲区消费端）与 `get_map_data()`。
+# core 与 disp 都不依赖 logger（无环）。
+wp8f-disp = { path = "../disp", optional = true }
+# `.wpr` 容器的 meta 段是 JSON（容器本身在同一 crate 的 src/wpr.rs 里，纯函数、无 I/O）。
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

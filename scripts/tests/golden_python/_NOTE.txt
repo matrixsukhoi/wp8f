@@ -1,0 +1,76 @@
+黄金样本同步说明（本文件不是样本，compare 只扫 *.json）
+=========================================================
+
+这些样本原本是"旧 Python 实现"的响应，用于换实现时逐字段比对。Python 实现早已移除，
+现在它们的作用是**冻结的回归样本**：新实现跑出来必须与之一致。
+
+2026-10-02 因「配置提交成 mini、样本还冻结在 circle」重新同步了 1 处（**唯一一次动了内容**）：
+
+* `config_default.json` —— 内嵌的 `config/default.json` 文本按**仓库当前文件**重新取了一份：
+  `hud_type: circle → mini`、`minihud_enabled: false → true`、`circle_enabled: true → false`
+  （其余 43 个键一字未动）。
+* 为什么必须同步：`65a5bbd0` 把 `config/default.json` 提交成了 mini，而样本还是更早的 circle
+  —— **干净检出**跑 `python scripts/tests/api_parity.py selftest` 必然红
+  （探针跑一圈会把配置改成 circle，所以本地"顺带绿"很容易掩盖这个问题）。
+* 同步口径与 `capture` 完全一致：读文件原文 → `normalize()` → `json.dumps(..., indent=1)`。
+
+2026-10-02 因「路由 `acmi` → `replay`」改名，只改了**文件名**（内容一字未动）：
+
+* `acmi_list.json` → `replay_list.json`、`acmi_load.json` → `replay_load.json`
+  —— 端点 `/api/acmi/list|load` → `/api/replay/list|load`，`api_parity.ENDPOINTS` 的
+  键名与 `SHAPE_ONLY` 同步改成 `replay_list` / `replay_list.json`。
+  这两个文件里存的是**响应体**，不含路由字符串，因此采样值不需要重采；
+  比对口径（list 只比形状、load 逐字段）也没变。
+* 注意别把这次改名跟"ACMI 导出格式"混起来：`format=acmi`（TacView 的
+  `text/acmi/tacview`）是**导出目标格式名**，仍然叫 acmi，`.acmi` 文件也照旧产出。
+
+2026-10-02 因「记录不带底图 ⇒ 不铺底面地图」（删掉"借别的记录的底图"那套回退）而**不需要动样本**：
+
+* `replay_load.json` 里本来就没有 `fallback_image` —— `capture` 写样本前会先跑 `normalize()`，
+  而该键当时登记在 `api_parity.VOLATILE_KEYS` 里，早就被丢掉了。
+  现在服务端响应里也没有这个字段，比对自然一致；所以顺手把 `VOLATILE_KEYS` 里的
+  `fallback_image` 删了（不再需要"归一化时丢掉"）。样本文件内容一字未动。
+
+2026-10-01（第二轮）因「颜色键简化」重新同步了 1 处：
+
+* `config_default.json` —— 配置里删掉了 `map_color` / `circle_color` / `poi_color`
+  （POI 十字改用警示色 `hint_color`、地图与圆环统一用数字色 `data_color`），
+  样本内嵌的 `config/default.json` 文本按**当前文件**重新取了一份
+  （顺带对齐了用户手改的整数写法 16.0→16、`map_obj_record_every_frames` 8→1、`pool_mb` 4→8）。
+  采集口径不变：`/api/config/default.json` 返回的就是该文件的原文。
+
+* `acmi_load.json` **没改**：回放加载新增的 `map.fallback_image`（记录没带底图时的底图回退来源）
+  指向 logs/ 里哪一份记录取决于用户当下有哪些录制，已登记进 `api_parity.VOLATILE_KEYS`
+  （两侧归一化时整个丢掉，与 `mtime`/`size` 同类）。
+
+2026-10-01（第一轮）因「回放只支持 .wpr」的改动，重新同步了 3 处：
+1. `acmi_load.json`（303 KB）
+   - 旧样本：`logs/wp8f_1790520340247.acmi` 的 **ACMI 文本解析**结果（format=acmi，
+     frames = [t, lon, lat, alt, ...]）。
+   - 新样本：`logs/wp8f_1790837309661.wpr` 的**版本 2 容器解析**结果（format=wpr /
+     planar=true / coords=world_km_north_up，frames = [t, 东km, 北km, alt, ...]，
+     带 groups / map 元数据）。
+   - 为什么必须换：`.acmi` / `.csv` 的读路径（`gui/src/acmi.rs`、列表收录、按内容嗅探的
+     加载分支）已删除，`/api/replay/load` 只认 `.wpr`；旧样本再也采不出来。
+   - 采集口径：`api_parity.capture` 现在按**文件名排序取第一个能加载成功**的 `.wpr`
+     （按 mtime 取"最新"会让样本随用户新录制漂移）。
+
+2. `acmi_list.json`
+   - 旧样本：`.acmi` + `wp8f_*.csv` 的混合列表（每项带 `kind`）。
+   - 新样本：只有 `.wpr`，列表项形状 = `{name, size, mtime}` —— `kind` 字段已删除
+     （列表只剩一种类型，前端不再按 kind/扩展名分支）。该文件仍是 SHAPE_ONLY 比对
+     （大小/时间随录制变化，只比结构）。
+
+3. `_acmi_files.txt` → `_replay_files.txt`
+   - 采集时记录"这一轮用哪些文件当回放输入"的清单（`_` 前缀，不参与比对）。
+
+其余样本（health / system / config_* / fm_* / resident 等）未改动。
+
+2026-10-02 因「HUD 语言设置收敛成一个路径键 `hud_lang_path`」重新同步了 1 处：
+
+* `config_default.json` —— 内嵌的 `config/default.json` 文本按**本次提交内容**重采：
+  `hud_language: "zh"` + `lang_json: ""` 两个键合并成一条 `hud_lang_path: "resource/lang/zh.json"`
+  （**其余 44 个键一字未动**，脚本里核过差异键只有这三个）。
+* 注意重采的基准是**提交内容**而不是用户工作区那份：工作区里的 `font_path` 用户改成了自己的字体，
+  拿它采样本会让干净检出跑 `selftest` 直接红（与上一条同样的坑）。
+* 采集口径不变：读文件原文 → `json.dumps(..., ensure_ascii=False, indent=1)`、LF、无末尾换行。

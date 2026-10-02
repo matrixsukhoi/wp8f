@@ -1,0 +1,8 @@
+# 行尾统一（仓库里按 LF 存，检出到 Windows 时按下面的规则转换）
+#
+# 为什么需要：Windows 工具链（cmd / PowerShell / 编辑器）与 WSL 混用时行尾会来回变，
+# 每次改动都产生"整文件 diff"这种噪音。实测仓库里 config/default.json 的索引内容是 CRLF，
+# 而其它 *.json 是 LF —— 就是因为没有这份规则。
+*.bat  text eol=crlf
+*.sh   text eol=lf
+*.json text eol=lf

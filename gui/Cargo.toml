@@ -1,0 +1,39 @@
+[package]
+name = "wp8f-gui"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "wp8f 控制台：系统托盘 + 本地 HTTP API + wry/WebView2 窗口（单进程）"
+
+[[bin]]
+name = "wp8f-gui"
+path = "src/main.rs"
+
+[dependencies]
+# 飞行记录（.wpr）：只取容器读写 + 纯函数转换器，**不带**记录线程那套
+# （default-features = false 关掉 `thread`，避免把 disp/winit/内嵌字体拖进控制台 exe）。
+wp8f-logger = { path = "../logger", default-features = false, features = ["convert"] }
+# 数据根解析 / `.blkx` 路径归一只有一份实现（`wp8f_flightmodel::fm_paths`），HUD 与 GUI 共用：
+# 以前 GUI 自己拼 `<仓库根>/resource/data`、core 侧却写死 `"./resource/data/"`（相对 cwd），
+# 两处默认值一旦漂移就会静默读错目录。**只用 fm_paths**（std-only），不会把 clap 之外的东西
+# 拖进控制台 exe。
+wp8f-flightmodel = { path = "../flightmodel" }
+serde = "1"
+serde_json = "1"
+wry = "0.53"
+tao = "0.34"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_JobObjects",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    # 必需：tray.rs 用 RegisterClassW/WNDCLASSW，而这两个符号在 windows-sys 里
+    # 由 Gdi 这个 feature 门控（WNDCLASSW 里引用了 HBRUSH）——不是"未使用"
+    "Win32_Graphics_Gdi",
+] }

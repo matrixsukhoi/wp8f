@@ -1,0 +1,135 @@
+name = "cruise"
+description = "Normal cruise flight at 3000m"
+
+[state]
+valid = true
+"aileron, %" = 0.0
+"elevator, %" = -5.0
+"rudder, %" = 0.0
+"flaps, %" = 0.0
+"gear, %" = 0.0
+"airbrake, %" = 0.0
+"H, m" = 3000.0
+"TAS, km/h" = 500.0
+"IAS, km/h" = 450.0
+"M" = 0.45
+"AoA, deg" = 3.5
+"AoS, deg" = 0.0
+"Ny" = 1.0
+"Vy, m/s" = 0.0
+"Wx, deg/s" = 0.0
+"Mfuel, kg" = 3000.0
+"Mfuel0, kg" = 7460.0
+"Mfuel 1, kg" = 500.0
+"throttle 1, %" = 75.0
+"power 1, hp" = 8000.0
+"RPM 1" = 5800.0
+"manifold pressure 1, atm" = 1.0
+"oil temp 1, C" = 80.0
+"thrust 1, kgs" = 2200.0
+"efficiency 1, %" = 85.0
+"throttle 2, %" = 75.0
+"power 2, hp" = 8000.0
+"RPM 2" = 5800.0
+"manifold pressure 2, atm" = 1.0
+"oil temp 2, C" = 80.0
+"thrust 2, kgs" = 2200.0
+"efficiency 2, %" = 85.0
+
+[indicators]
+valid = true
+army = "air"
+type = "fa_18c_switzerland"
+speed = 1.391374
+pedals1 = -0.000037
+pedals2 = -0.000037
+pedals3 = -0.000037
+pedals4 = -0.000037
+pedals5 = -0.000037
+stick_elevator = 0.0
+stick_ailerons = 0.0
+vario = 0.0
+altitude_hour = 3300.736572
+altitude_min = 300.736572
+altitude_10k = 3300.736572
+altitude1_10k = 3300.736572
+radio_altitude = 3000.0
+aviahorizon_roll = 0.0
+aviahorizon_pitch = 0.0
+bank = 0.0
+turn = 0.000017
+compass = 270.270599
+clock_hour = 1.0
+clock_min = 30.0
+clock_sec = 0.0
+airbrake_lever = 0.0
+gears = 0.0
+gear_lamp_down = 0.0
+gear_lamp_up = 1.0
+gear_lamp_off = 1.0
+throttle = 0.75
+throttle1 = 0.75
+weapon2 = 0.0
+weapon3 = 0.0
+flaps_indicator = 0.0
+flaps_indicator1 = 0.0
+aoa_indexer1 = 0.0
+aoa_indexer2 = 0.0
+aoa_indexer3 = 0.0
+blister1 = 1.0
+blister2 = 1.0
+blister3 = 1.0
+blister4 = 1.0
+blister5 = 1.0
+blister6 = 1.0
+blister7 = 1.0
+blister8 = 1.0
+blister9 = 1.0
+blister10 = 1.0
+blister11 = 1.0
+
+[map_info]
+grid_size = [131144.093750, 131144.093750]
+grid_steps = [16393.011718750, 16393.011718750]
+grid_zero = [-65572.0468750, 65572.0468750]
+hud_type = 0
+map_generation = 2
+map_max = [65536.0, 65536.0]
+map_min = [-65536.0, -65536.0]
+valid = true
+
+[[map_objects]]
+type = "aircraft"
+color = "#faC81E"
+"color[]" = [250, 200, 30]
+blink = 0
+icon = "Player"
+icon_bg = "none"
+x = 0.195773
+y = 0.919301
+dx = 0.089237
+dy = -0.996010
+
+[[map_objects]]
+type = "aircraft"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "Fighter"
+icon_bg = "none"
+x = 0.196021
+y = 0.917839
+dx = 0.077806
+dy = -0.996969
+
+[[map_objects]]
+type = "airfield"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "none"
+icon_bg = "none"
+sx = 0.054740
+sy = 0.922265
+ex = 0.057788
+ey = 0.898042

@@ -1,0 +1,27 @@
+[package]
+name = "datalink"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[features]
+# 构建可执行文件（服务端/测试客户端）时启用：cargo build -p datalink --features bins
+bins = ["dep:clap"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"], optional = true }
+wp8f-ring = { path = "../ring" }
+
+[lib]
+name = "datalink"
+path = "src/lib.rs"
+
+[[bin]]
+name = "datalink-server"
+path = "src/bin/datalink_server.rs"
+required-features = ["bins"]
+
+[[bin]]
+name = "datalink-test-client"
+path = "src/bin/datalink_test_client.rs"
+required-features = ["bins"]

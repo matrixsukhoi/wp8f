@@ -1,0 +1,780 @@
+name = "default"
+description = "Default test scenario matching War Thunder game server format"
+
+[state]
+valid = true
+"aileron, %" = -0.0
+"elevator, %" = 34.0
+"rudder, %" = 0.0
+"flaps, %" = 0.0
+"gear, %" = 100.0
+"airbrake, %" = 0.0
+"H, m" = 1026.0
+"TAS, km/h" = 7.0
+"IAS, km/h" = 6.0
+"M" = 0.01
+"AoA, deg" = -0.5
+"AoS, deg" = 34.7
+"Ny" = 1.00
+"Vy, m/s" = -0.0
+"Wx, deg/s" = 0.0
+"Mfuel, kg" = 4860.0
+"Mfuel0, kg" = 7460.0
+"Mfuel 1, kg" = 500.0
+"throttle 1, %" = 56.0
+"power 1, hp" = 0.0
+"RPM 1" = 1234.0
+"manifold pressure 1, atm" = 1.00
+"oil temp 1, C" = 51.0
+"thrust 1, kgs" = 500.0
+"efficiency 1, %" = 0.0
+"throttle 2, %" = 0.0
+"power 2, hp" = 0.0
+"RPM 2" = 0.0
+"manifold pressure 2, atm" = 1.00
+"oil temp 2, C" = 51.0
+"thrust 2, kgs" = 0.0
+"efficiency 2, %" = 0.0
+
+[indicators]
+valid = true
+army = "air"
+type = "fa_18c_switzerland"
+speed = 1.391374
+pedals1 = -0.000037
+pedals2 = -0.000037
+pedals3 = -0.000037
+pedals4 = -0.000037
+pedals5 = -0.000037
+stick_elevator = 0.355213
+stick_ailerons = 0.000139
+vario = -0.004518
+altitude_hour = 3366.736572
+altitude_min = 366.736572
+altitude_10k = 3366.736572
+altitude1_10k = 3366.736572
+radio_altitude = 6.606840
+aviahorizon_roll = 0.014213
+aviahorizon_pitch = 0.374723
+bank = -0.014213
+turn = 0.000017
+compass = 185.270599
+clock_hour = 1.100000
+clock_min = 6.000000
+clock_sec = 19.000000
+airbrake_lever = 1.000000
+gears = 1.000000
+gear_lamp_down = 1.000000
+gear_lamp_up = 1.000000
+gear_lamp_off = 1.000000
+throttle = 0.000000
+throttle1 = 0.000000
+weapon2 = 0.000000
+weapon3 = 0.000000
+flaps_indicator = 0.000000
+flaps_indicator1 = 0.000000
+aoa_indexer1 = -0.188658
+aoa_indexer2 = -0.188658
+aoa_indexer3 = -0.188658
+blister1 = 1.000000
+blister2 = 1.000000
+blister3 = 1.000000
+blister4 = 1.000000
+blister5 = 1.000000
+blister6 = 1.000000
+blister7 = 1.000000
+blister8 = 1.000000
+blister9 = 1.000000
+blister10 = 1.000000
+blister11 = 1.000000
+
+[map_info]
+grid_size = [131144.093750, 131144.093750]
+grid_steps = [16393.011718750, 16393.011718750]
+grid_zero = [-65572.0468750, 65572.0468750]
+hud_type = 0
+map_generation = 2
+map_max = [65536.0, 65536.0]
+map_min = [-65536.0, -65536.0]
+valid = true
+
+[[map_objects]]
+type = "airfield"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "none"
+icon_bg = "none"
+sx = 0.054740
+sy = 0.922265
+ex = 0.057788
+ey = 0.898042
+
+[[map_objects]]
+type = "airfield"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "none"
+icon_bg = "none"
+sx = 0.628635
+sy = 0.897881
+ex = 0.618049
+ey = 0.875881
+
+[[map_objects]]
+type = "airfield"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "none"
+icon_bg = "none"
+sx = 0.195711
+sy = 0.919908
+ex = 0.197890
+ey = 0.895592
+
+[[map_objects]]
+type = "aircraft"
+color = "#faC81E"
+"color[]" = [250, 200, 30]
+blink = 0
+icon = "Player"
+icon_bg = "none"
+x = 0.195773
+y = 0.919301
+dx = 0.089237
+dy = -0.996010
+
+[[map_objects]]
+type = "aircraft"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "Fighter"
+icon_bg = "none"
+x = 0.196021
+y = 0.917839
+dx = 0.077806
+dy = -0.996969
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.748663
+y = 0.242075
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.747928
+y = 0.245289
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.747745
+y = 0.245799
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.198910
+y = 0.915198
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.199516
+y = 0.918197
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.197169
+y = 0.917168
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.198910
+y = 0.915198
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.199271
+y = 0.898654
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.200015
+y = 0.903401
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.199565
+y = 0.901695
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.199813
+y = 0.907102
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.199020
+y = 0.908093
+
+[[map_objects]]
+type = "ground_model"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.200668
+y = 0.897281
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "TankDestroyer"
+icon_bg = "none"
+x = 0.400901
+y = 0.716595
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "TankDestroyer"
+icon_bg = "none"
+x = 0.400888
+y = 0.717229
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.400913
+y = 0.715955
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.279186
+y = 0.388235
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.748729
+y = 0.241382
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.748785
+y = 0.240700
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.748568
+y = 0.242784
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.278912
+y = 0.386971
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.747538
+y = 0.246314
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.748458
+y = 0.243343
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.400937
+y = 0.714653
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.400946
+y = 0.713974
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.279703
+y = 0.390815
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "TankDestroyer"
+icon_bg = "none"
+x = 0.400925
+y = 0.715323
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.279316
+y = 0.388858
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.279049
+y = 0.387594
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.279439
+y = 0.389463
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.279570
+y = 0.390124
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.331713
+y = 0.521180
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.331802
+y = 0.522110
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.331852
+y = 0.522653
+
+[[map_objects]]
+type = "ground_model"
+color = "#f00C00"
+"color[]" = [240, 12, 0]
+blink = 0
+icon = "LightTank"
+icon_bg = "none"
+x = 0.329407
+y = 0.523020
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.331566
+y = 0.533142
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.332692
+y = 0.533550
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.331747
+y = 0.533479
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.336688
+y = 0.532825
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "SPAA"
+icon_bg = "none"
+x = 0.333675
+y = 0.532924
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.332853
+y = 0.533574
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.331653
+y = 0.533812
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.331458
+y = 0.532736
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.333562
+y = 0.531626
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "MediumTank"
+icon_bg = "none"
+x = 0.333312
+y = 0.531690
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.337527
+y = 0.531857
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.334198
+y = 0.531730
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.333821
+y = 0.531499
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.333532
+y = 0.532430
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.332404
+y = 0.531619
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.334992
+y = 0.532529
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.333545
+y = 0.532505
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.331597
+y = 0.532200
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.336813
+y = 0.532480
+
+[[map_objects]]
+type = "ground_model"
+color = "#043FFF"
+"color[]" = [4, 63, 255]
+blink = 0
+icon = "Ground"
+icon_bg = "none"
+x = 0.331721
+y = 0.532910
+
+[[map_objects]]
+type = "capture_zone"
+color = "#dcE4FA"
+"color[]" = [220, 228, 250]
+blink = 1
+icon = "capture_zone"
+icon_bg = "none"
+x = 0.812466
+y = 0.437328
+
+[[map_objects]]
+type = "bombing_point"
+color = "#fa0C00"
+"color[]" = [250, 12, 0]
+blink = 0
+icon = "bombing_point"
+icon_bg = "none"
+x = 0.719472
+y = 0.344107
+
+[[map_objects]]
+type = "defending_point"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "defending_point"
+icon_bg = "none"
+x = 0.418134
+y = 0.795454
+
+[[map_objects]]
+type = "defending_point"
+color = "#174DFF"
+"color[]" = [23, 77, 255]
+blink = 0
+icon = "defending_point"
+icon_bg = "none"
+x = 0.118555
+y = 0.684328
+
+[[map_objects]]
+type = "bombing_point"
+color = "#fa0C00"
+"color[]" = [250, 12, 0]
+blink = 0
+icon = "bombing_point"
+icon_bg = "none"
+x = 0.419063
+y = 0.342929
+
+[[map_objects]]
+type = "bombing_point"
+color = "#fa0C00"
+"color[]" = [250, 12, 0]
+blink = 0
+icon = "bombing_point"
+icon_bg = "none"
+x = 0.224742
+y = 0.153674
+
+[[map_objects]]
+type = "bombing_point"
+color = "#fa0C00"
+"color[]" = [250, 12, 0]
+blink = 0
+icon = "bombing_point"
+icon_bg = "none"
+x = 0.206473
+y = 0.336178
+

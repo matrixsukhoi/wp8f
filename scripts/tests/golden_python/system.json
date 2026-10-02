@@ -1,0 +1,24 @@
+{
+ "__status__": 200,
+ "body": {
+  "root": "<volatile>",
+  "wp8f_exe": "<volatile>",
+  "wp8f_exe_exists": "<volatile>",
+  "config_dir": "<volatile>",
+  "logs_dir": "<volatile>",
+  "fm_dir": "<volatile>",
+  "fm_dir_exists": "<volatile>",
+  "tray_available": "<volatile>",
+  "tray_error": "<volatile>",
+  "resident": "<volatile>",
+  "resident_status": "<volatile>",
+  "window_exists": "<volatile>",
+  "window_pid": "<volatile>",
+  "window_error": "<volatile>",
+  "wp8f_running": "<volatile>",
+  "children": "<volatile>",
+  "job_object": "<volatile>",
+  "job_assigned": "<volatile>",
+  "job_error": "<volatile>"
+ }
+}

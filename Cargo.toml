@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "core",
+    "ring",
+    "disp",
+    "logger",
+    "flightmodel",
+    "datalink",
+    "test-server",
+    "gui",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = false
+panic = "abort"
+codegen-units = 1
+strip = true

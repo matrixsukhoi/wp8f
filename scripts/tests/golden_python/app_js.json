@@ -1,0 +1,6 @@
+{
+ "__status__": 200,
+ "text_len": 50191,
+ "head": "/* wp8f 控制台前端逻辑（零构建链：原生 JS） */\nconst $ = (sel) => document.querySelector(sel);\nconst api = async (url, opts) => {\n  const r = await fetch(url, opts);\n  if (!r.ok) {\n    const t = await r.text();\n    throw new Error(`${r.status}: ${t}`);\n  }\n  return r.json();\n};\n\n/* HTML 转义：所有进入 innerHTML 的外部数据（文件名/机型名/配置值/错误消息）必须过这里 */\nconst esc = (s) =>\n  String(s ?? \"\").replace(/[&<>\"']/g, (c) =>\n    ({ \"&\": \"&",
+ "is_html": false
+}

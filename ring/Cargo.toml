@@ -1,0 +1,11 @@
+[package]
+name = "wp8f-ring"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[dependencies]
+
+[lib]
+name = "wp8f_ring"
+path = "src/lib.rs"

@@ -1,0 +1,126 @@
+/* FM 数据库更新面板（P3）的样式。
+ *
+ * 单独一个文件（不并进 style.css）：面板的 DOM 由 update.js 自己挂载，
+ * 样式跟着它走，改动面小、也不会和配置器的整页 restyle 互相牵连。
+ * 颜色沿用控制台的暖灰 + 青绿主色（与 style.css 的 --* 变量同源观感，但这里写死具体值，
+ * 避免依赖另一个文件的变量定义顺序）。 */
+#fm-update.up-card {
+  margin: 0 0 12px 0;
+  padding: 10px 12px 8px 12px;
+  border: 1px solid #e2e0d8;
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+#fm-update .up-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+#fm-update .up-title {
+  font-weight: 600;
+  color: #2e7d6f;
+}
+#fm-update .up-phase {
+  font-size: 11.5px;
+  color: #8f8f88;
+}
+#fm-update .up-phase.ok { color: #2e8b57; }
+#fm-update .up-phase.err { color: #c0392b; }
+
+#fm-update .up-ver {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: baseline;
+  font-size: 12px;
+  color: #4a4a46;
+}
+#fm-update .up-ver i {
+  font-style: normal;
+  color: #8f8f88;
+  margin-right: 4px;
+}
+#fm-update .up-ver b {
+  font-family: "Sarasa Mono SC", Consolas, monospace;
+  font-weight: 600;
+}
+#fm-update .up-note { color: #6b6b64; }
+
+#fm-update .up-bar {
+  margin: 7px 0 4px 0;
+  height: 6px;
+  border-radius: 3px;
+  background: #ecebe5;
+  overflow: hidden;
+}
+#fm-update .up-bar-fill {
+  height: 100%;
+  width: 0;
+  background: #2e7d6f;
+  transition: width .25s linear;
+}
+#fm-update .up-prog {
+  font-size: 11.5px;
+  color: #6b6b64;
+  font-family: "Sarasa Mono SC", Consolas, monospace;
+  min-height: 15px;
+}
+#fm-update .up-msg {
+  font-size: 12px;
+  color: #4a4a46;
+  margin: 4px 0 2px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 0;
+}
+#fm-update .up-msg.err { color: #c0392b; }
+#fm-update .up-msg.warn { color: #c1873b; }
+
+#fm-update .up-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+#fm-update .up-btns button[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+#fm-update .up-confirm {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e6c9a8;
+  border-left: 3px solid #c1873b;
+  border-radius: 6px;
+  background: #fdf8f1;
+}
+#fm-update .up-confirm-text {
+  font-size: 12px;
+  color: #4a4a46;
+  line-height: 1.5;
+}
+
+#fm-update .up-log {
+  margin: 8px 0 0 0;
+  padding: 6px 8px;
+  max-height: 132px;
+  overflow: auto;
+  font-family: "Sarasa Mono SC", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #55554f;
+  background: #f4f3ee;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#fm-update .up-legal {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e0d8;
+  font-size: 11px;
+  color: #8f8f88;
+  line-height: 1.5;
+}

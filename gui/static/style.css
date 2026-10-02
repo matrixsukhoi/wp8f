@@ -1,0 +1,709 @@
+/* wp8f 控制台 —— 暖灰纸感 + 青绿强调；8px 栅格、圆角、克制阴影
+   设计约定：
+   · 底色暖灰 #f7f7f4，卡片纯白，分割线极浅
+   · 强调色青绿 #2e7d6f，只用于"当前/主操作"：主按钮、导航选中、开关开启、
+     滑杆已填充段、输入 focus、图表首色
+   · 控件统一圆角与高度；正文 13px，标签 12.5px，数字用等宽数字（tabular-nums）
+   · 所有类名保持与 app.js 一致（仅视觉变化） */
+:root {
+  --bg: #f7f7f4;
+  --bg-soft: #fbfbf8;
+  --surface: #ffffff;
+  --field: #ffffff;
+  --fg: #1c1c1c;
+  --fg-2: #4a4a46;
+  --muted: #8f8f88;
+  --line: #cfcfc8;
+  --line-soft: #e6e6df;
+
+  --accent: #2e7d6f;
+  --accent-strong: #256257;
+  --accent-soft: #e8f1ee;
+  --accent-line: #b7d5cd;
+
+  --ok: #2e7d6f;
+  --err: #a33b30;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 2px rgba(28, 28, 28, .04), 0 1px 8px rgba(28, 28, 28, .035);
+  --shadow-pop: 0 6px 24px rgba(28, 28, 28, .12);
+
+  --mono: "Sarasa Mono SC", Consolas, "Cascadia Mono", monospace;
+  --sans: "Sarasa Mono SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.65 var(--sans);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 数字统一等宽，避免读数跳动 */
+b, .sval, #fm-fuel-val, td, .fm-kv b, .time-marks, #rp-objects { font-variant-numeric: tabular-nums; }
+
+/* ===== 滚动条：细、圆角、悬停加深 ===== */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #d3d3cc;
+  border: 3px solid var(--bg);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover { background: #b9b9b1; }
+
+/* ===== 主体：左侧导航 + 内容 ===== */
+.main { flex: 1; display: flex; min-height: 0; }
+.nav {
+  flex: 0 0 116px;
+  /* `min-width: 0` 不是可选项：flex item 默认 `min-width: auto` = "不许窄于内容的最小宽度"，
+     而侧栏底部那个语言 `<select>` 的最小宽度（浏览器按最长选项文字给 ~150px）会**把整个侧栏
+     撑宽到 175px**（实测：配置器卡片因此从 598px 缩到 568px、网格左边缘整体右移 60px）。
+     加上这一行，`flex: 0 0 116px` 才是真的 116px。 */
+  min-width: 0;
+  border-right: 1px solid var(--line-soft);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-soft);
+}
+.nav .brand {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: .5px;
+  padding: 2px 8px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.nav .brand small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; letter-spacing: 0; }
+.nav .tab {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: .5px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: center;          /* 栏目文字居中 */
+  transition: background .13s, color .13s;
+}
+.nav .tab:hover { background: rgba(46, 125, 111, .07); color: var(--fg); }
+.nav .tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* 语言下拉（侧栏底部）：`margin-top:auto` 把它推到底部，配置器的卡片网格高度因此完全不变
+   （layout_check 的"一屏放下"很紧，见颜色卡片的注释）。 */
+.nav .lang {
+  margin-top: auto;
+  padding: 10px 2px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nav .lang label { font-size: 11px; color: var(--muted); }
+/* 宽度跟着侧栏走（`max-width` 兜住"选项文字很长"的语言名，见 .nav 的 min-width 注释） */
+.nav .lang select { width: 100%; max-width: 100%; min-width: 0; height: 26px; padding: 1px 4px; font-size: 12px; }
+/* 语言名（简体中文 / English / Русский…）在 96px 宽的侧栏里要能读全 */
+.nav .lang select option { font-size: 12.5px; }
+
+.content { flex: 1; overflow: auto; padding: 14px 22px 60px; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* 宽屏：配置卡片两列（窄窗自动回单列）
+   align-items: stretch → 同一排的两张卡片等高，避免出现"锯齿状"空洞
+   #config-form{display:contents} → JS 生成的卡片与静态"配置文件"卡片同处一个网格 */
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+#config-form { display: contents; }
+
+/* ===== 表单网格（卡片内自适应列数） ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2px 20px;
+  margin-bottom: 8px;
+}
+.grid:last-child { margin-bottom: 0; }
+/* 卡片内的"工具行"（如配置文件：标签紧挨控件、整体左对齐） */
+.grid.inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 26px; margin-bottom: 0; }
+.grid.inline .item { flex: 0 0 auto; gap: 10px; padding: 0; min-height: 30px; }
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+  min-height: 28px;
+}
+.item label {
+  font-size: 12.5px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  cursor: default;
+}
+
+/* 标签定宽对齐（1em ≈ 1 个中文字符宽，标签字号 12.5px）：
+   同一张卡片里的标签等宽，后面的滑杆/输入框起点才是齐的。
+   布局卡片按 6 个中文字符对齐、字体卡片按 4 个 —— 标签超宽会被省略号截断，
+   所以这两张卡片的标签名不许超过对应字数（**按各语言的译文分别把关**）。
+   ⚠️ 选择器挂 `data-card-id`（语言无关的卡片 id），**不能**挂 `data-card`：
+   后者是翻译后的标题，切一次语言这些规则就全失效（标签列宽与颜色卡片的收紧都会跑掉）。 */
+.card[data-card-id="layout"] .grid .item > label { width: 6em; }
+.card[data-card-id="font"] .grid .item > label { width: 4em; }
+/* 非中文界面：拉丁/西里尔/日文标签比中文宽，按同一套"定宽列"口径放宽
+   （否则英文标签会被省略号截断，看起来像漏了字）。中文下保持 6em/4em ——
+   ui_checks 直接锁了 75px/50px 这两个值。 */
+html:not([lang^="zh"]) .card[data-card-id="layout"] .grid .item > label { width: 8em; }
+html:not([lang^="zh"]) .card[data-card-id="font"] .grid .item > label { width: 6em; }
+
+/* HUD 类型单选组（MiniHUD / 圆环 HUD 二选一；互斥逻辑在 app.js） */
+.item .radios { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+.item .radios .radio { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--fg-2); font-size: 12.5px; }
+.item .radios .radio input[type="radio"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+
+/* 颜色卡片项最多（10 项 → 2 列 5 行）：行高/行距收紧一点，
+   否则整页比 1365×768 视口高 9px（layout_check 的"一屏放下"会红）。
+   这条必须**所有语言**都生效（选择器是语言无关的 data-card-id）。 */
+.card[data-card-id="color"] .grid { gap: 1px 20px; }
+.card[data-card-id="color"] .item { padding: 1px 0; }
+.card[data-card-id="color"] .item input.colortext { height: 24px; }
+
+/* ===== 开关（44×24 圆角轨道 + 圆形滑块；开启=强调色） ===== */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 24px;
+  border: none;
+  border-radius: 12px;
+  background: #dcdcd5;
+  position: relative;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background .16s ease;
+}
+input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .22);
+  transition: left .16s ease;
+}
+input[type="checkbox"]:checked { background: var(--accent); }
+input[type="checkbox"]:checked::before { left: 22px; }
+input[type="checkbox"]:hover { background: #d0d0c8; }
+input[type="checkbox"]:checked:hover { background: var(--accent-strong); }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+
+/* ===== 输入/下拉 ===== */
+select, input[type="text"], input[type="number"] {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 9px;
+  min-width: 120px;
+  transition: border-color .13s, box-shadow .13s;
+}
+select:hover, input[type="text"]:hover, input[type="number"]:hover { border-color: var(--muted); }
+select:focus, input[type="text"]:focus, input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(46, 125, 111, .12);
+}
+select { cursor: pointer; height: 30px; min-width: 150px; flex: 1 1 auto; }
+select option { background: #ffffff !important; color: #1c1c1c !important; font-size: 13px; }
+
+textarea {
+  width: 100%;
+  min-height: 380px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: var(--fg);
+  font: 12px/1.65 var(--mono);
+  padding: 12px;
+  resize: vertical;
+}
+textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46, 125, 111, .12); }
+
+/* ===== 滑杆（accent-color 自带"已填充段"配色） ===== */
+input[type="range"] { accent-color: var(--accent); height: 18px; cursor: pointer; }
+.slider-row { margin: 8px 0 20px; }
+.slider-row input[type="range"] { width: 320px; }
+.time-marks {
+  width: 320px;
+  display: flex;
+  justify-content: space-between;
+  font: 12px var(--mono);
+  color: var(--muted);
+  margin-top: 2px;
+}
+.time-marks #rp-clock { color: var(--fg); font-weight: 600; }
+
+/* ===== 分组小标题 ===== */
+.sec {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  letter-spacing: .5px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 6px;
+  margin: 18px 0 12px;
+}
+
+/* 小标题右侧的附注（飞行模型页签的「FM 数据版本：…」）：读盘来的本地数据版本，不是装饰 */
+.sec .sec-note {
+  float: right;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 10px 14px 11px;
+  margin: 0;
+  box-shadow: var(--shadow);
+}
+.card h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: .5px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 7px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.card h3 .h3-hint { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--muted); letter-spacing: 0; }
+/* 标题行里的小下拉（字体卡片选 `font_path`）：借标题行放控件，**不额外占一行高度**
+   —— 卡片多一行就是 30px，而"一屏放下"只剩几十 px 余量（见颜色卡片的注释）。 */
+.card h3 .h3-sel {
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  height: 24px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* ===== 底部操作条 ===== */
+.actionbar {
+  position: fixed;
+  left: 116px;
+  right: 0;
+  bottom: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;   /* 按钮靠右下角 */
+  gap: 12px;
+  padding-right: 26px;
+  border-top: 1px solid var(--line-soft);
+  background: rgba(251, 251, 248, .92);
+  backdrop-filter: blur(6px);
+  z-index: 40;
+}
+.actionbar .slot { display: flex; align-items: center; justify-content: center; }
+/* 左侧状态区：当前配置 + 自动保存结果（把空白用起来，按钮仍靠右下角） */
+.actionbar .status {
+  margin-right: auto;
+  padding-left: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  max-width: 62%;
+}
+.actionbar .cfg-now { font-size: 12px; font-weight: 600; color: var(--accent-strong); white-space: nowrap; }
+.actionbar .status .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbtn {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 3px;
+  text-indent: 3px;
+  cursor: pointer;
+  padding: 9px 26px;
+  transition: background .13s, border-color .13s, box-shadow .13s, transform .06s;
+}
+.tbtn:hover { border-color: var(--muted); background: var(--bg-soft); }
+.tbtn:active { transform: translateY(1px); }
+.tbtn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(46, 125, 111, .25);
+}
+.tbtn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.tbtn.ghost { border-color: transparent; background: transparent; color: var(--fg-2); }
+.tbtn.ghost:hover { background: rgba(46, 125, 111, .07); color: var(--fg); border-color: transparent; }
+.tbtn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+.tbtn.boxed { border-color: var(--line); border-radius: var(--radius-sm); letter-spacing: 2px; padding: 9px 20px; }
+.tbtn:disabled { opacity: .5; cursor: default; }
+
+/* ===== 提示 / 空态 / 加载 ===== */
+.msg { min-height: 18px; font-size: 12px; color: var(--muted); }
+.msg.err { color: var(--err); }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.split { display: flex; gap: 16px; }
+.split .col { flex: 1; min-width: 0; }
+
+.chart {
+  min-height: 380px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+  padding: 26px 16px;
+}
+.empty .ico { font-size: 22px; opacity: .5; line-height: 1; }
+.empty .tip { font-size: 12.5px; }
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--accent-line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 右下角浮动提示（拖拽配置会话） ===== */
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 74px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  padding: 10px 14px;
+  font-size: 13px;
+  z-index: 50;
+}
+.toast.hidden { display: none; }
+.toast .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.toast .close { border: none; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); }
+.toast .close:hover { color: var(--fg); }
+kbd {
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font: 11.5px var(--mono);
+  background: var(--bg-soft);
+}
+
+/* ===== FM 信息面板：分组卡片 ===== */
+.fm-card {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 12px 16px 14px;
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+.fm-card h4 {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  color: var(--fg-2);
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 7px;
+  margin-bottom: 10px;
+}
+.fm-kvs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 22px; }
+.fm-kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--line-soft);
+}
+.fm-kv span { color: var(--muted); white-space: nowrap; }
+.fm-kv b { color: var(--fg); font-weight: 600; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+table.fm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+  font-size: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.fm-table th, .fm-table td {
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 5px 10px;
+  text-align: right;
+  font-family: var(--mono);
+}
+.fm-table tr:last-child td { border-bottom: none; }
+.fm-table th { background: var(--bg-soft); color: var(--fg-2); font-weight: 600; text-align: center; }
+.fm-table td:first-child, .fm-table th:first-child { text-align: left; font-family: inherit; }
+
+/* ===== 回放：3D 轨迹图 + 右侧遥测面板 ===== */
+.rp-wrap { display: flex; gap: 12px; align-items: stretch; }
+#rp-chart {
+  flex: 1;
+  min-width: 0;
+  height: 540px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.rp-telemetry {
+  flex: 0 0 280px;
+  max-height: 540px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg);
+}
+.tel-row { border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; padding: 5px 9px; margin-bottom: 10px; background: var(--accent-soft); }
+.tel-name { font-weight: 600; margin-bottom: 2px; }
+.tel-vals { color: var(--fg-2); }
+.tel-vals b { color: var(--fg); font-weight: 600; }
+
+/* ===== 回放：`.wpr` 的底图铺在 3D 轨迹图的 xoy 底面（见 app.js 的 rpGround*） ===== */
+/* 转换区：默认收起，不占回放页签版面；展开后是两行四列（格式/零点纬度/零点经度/按钮） */
+#rp-convert-box { margin: 12px 0 4px; }
+#rp-convert-box > summary {
+  cursor: pointer; font-size: 12.5px; color: var(--fg-2);
+  padding: 4px 0 4px 8px; list-style-position: inside;
+}
+#rp-convert-box[open] > summary { margin-bottom: 6px; color: var(--fg); }
+#rp-convert-box .grid { margin-top: 0; }
+#rp-convert-box .hint { padding-left: 8px; margin-top: 6px; line-height: 1.6; }
+
+/* ===== FM 3D 曲面高度 ===== */
+.chart3d { height: 460px; min-height: 460px; }
+
+/* 滑块行 + 数值读数 */
+.item .sld { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+/* 滑杆可伸缩：窄卡片里自动变短而不是顶出边界 */
+.item .sld input[type="range"] { flex: 1 1 90px; width: auto; min-width: 90px; max-width: 190px; }
+.item .sval { flex: 0 0 auto; min-width: 42px; text-align: right; color: var(--fg); font-weight: 600; }
+.item input.colortext { width: 112px; height: 26px; padding: 2px 8px; text-align: center; font-family: var(--mono); }
+.item input.colortext.bad { border-color: var(--err); box-shadow: 0 0 0 3px rgba(176, 58, 46, .12); }
+.swatch { display: inline-block; width: 22px; height: 15px; border: 1px solid var(--line); border-radius: 4px; }
+/* 色块在输入框左侧时留一点间距（.sld 的 gap 已够，这里只保证不被压扁） */
+.item .sld .swatch { flex: 0 0 auto; }
+/* 数值输入入口在滑块右边的数字上（左侧标签不再响应点击） */
+.item .sval-edit { cursor: text; border-bottom: 1px dashed transparent; }
+.item .sval-edit:hover { border-bottom-color: var(--accent-line); }
+.item input.lbl-input {
+  width: 92px;
+  height: 26px;
+  padding: 2px 6px;
+  font: 12.5px var(--mono);
+  text-align: right;
+}
+
+/* 开关行：开关在左、贴近标签 */
+.item.switch { justify-content: flex-start; gap: 10px; }
+.item.switch input[type="checkbox"] { flex: 0 0 44px; }
+/* 文本框/下拉统一宽度 → 同一列里的控件左右边缘对齐 */
+.item > select, .item > input[type="text"], .item > input[type="number"] {
+  flex: 0 0 auto;
+  width: 200px;
+  height: 28px;
+  padding: 2px 8px;
+}
+#config-select { width: 210px; }
+/* 底部操作条里的模式开关（命令行调试）：**复用全局的 44×24 开关样式**——
+   不要去改 `input[type=checkbox]` 的尺寸：它的 `::before` 圆钮是按 44×24 定位的，
+   轨道改小圆钮就会溢出来盖住文字（勾选时 left:22px 整个跑到框外，实测踩过）。 */
+.tgl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line, #4a4a4a);
+  border-radius: 4px;
+  color: var(--fg-2, #cfcfc8);
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+/* 环形缓冲槽数：卡片标题行里的两个窄数字输入（放行里会让整页多 30px，"一屏放下"放不下）。
+   `min-width: 0` 必须写：基础规则给所有 number 输入留了 min-width:120px，
+   不覆盖的话这两个框会各占 120px、把标题行撑满（实测踩过）。 */
+.h3-hint input.ring-num {
+  width: 56px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  margin-left: 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.grid.inline .tbtn.boxed { padding: 6px 16px; }
+.item.full { grid-column: 1 / -1; width: auto; min-width: 320px; }
+.item.full .fuel-slider { max-width: 320px; }
+#fm-extra { width: 130px; }
+.item .gap-l { margin-left: 22px; }
+.sub { margin-top: 10px; padding-left: 2px; border-left: 2px solid var(--accent-soft); }
+
+/* ===== FM 计算参数（燃油滑块 / 额外重量） ===== */
+.fuel-slider { flex: 1; min-width: 170px; height: 18px; }
+#fm-fuel-val { color: var(--fg); font-weight: 600; margin-left: 4px; font-family: var(--mono); }
+
+/* ===== 已加入的回放文件标签 ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent-strong);
+  border-radius: 999px;
+  padding: 4px 8px 4px 12px;
+  font-size: 12px;
+  max-width: 340px;
+}
+.chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .dots { display: inline-flex; gap: 3px; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+.chip .x {
+  border: none; background: transparent; cursor: pointer;
+  color: var(--accent-strong); font-size: 13px; line-height: 1; padding: 0 2px; border-radius: 50%;
+}
+.chip .x:hover { background: rgba(46, 125, 111, .18); }
+
+/* ===== 回放标记图例（#rp-marker-legend）=====
+   与图上的标记完全同色：**只有亮黄 #ffe600**，没有深色描边（见 replay.js 的 RP_MARKER_*） */
+#rp-marker-legend { display: flex; align-items: center; gap: 7px; margin: 2px 0 10px; }
+#rp-marker-legend .mk-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #ffe600;
+}
+#rp-marker-legend .mk-line {
+  width: 18px; height: 2.4px; background: #ffe600;
+}
+
+/* ===== 右下角通知堆栈（#notify） ===== */
+.notify-box {
+  position: fixed;
+  right: 18px;
+  bottom: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 60;
+  pointer-events: none;
+}
+.notify {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 4px solid var(--muted);
+  border-radius: var(--radius);
+  padding: 8px 13px;
+  font-size: 12.5px;
+  color: var(--fg);
+  box-shadow: var(--shadow-pop);
+  max-width: 440px;
+  animation: notify-in .18s ease-out;
+}
+.notify.ok { border-left-color: var(--ok); }
+.notify.err { border-left-color: var(--err); color: #7c2a22; }
+@keyframes notify-in {
+  from { transform: translateX(28px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ===== 导弹模拟（子模块离线 HTML，占满内容区） ===== */
+#tab-missile.active { display: flex; flex-direction: column; height: calc(100vh - 74px); }
+.ms-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px 10px;
+  flex: 0 0 auto;
+}
+.ms-info { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+.ms-info b { font-size: 13px; color: var(--fg); }
+.ms-holder {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.ms-holder .empty { height: 100%; }
+#ms-frame { width: 100%; height: 100%; border: 0; display: block; }

@@ -1,0 +1,32 @@
+[package]
+name = "wp8f-flightmodel"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+# 两套 FM 文本解析实现（D12：用 feature 选择，不新建 crate、不用 workspace exclude）。
+#   fm-json（**默认**）—— GitHub `War-Thunder-Datamine` 的 JSON 版（`{ "k": v }`），见 `json_adapter`。
+#                        用户手上的 `resource/data` 自 2.59.0.43 起就是这一套（JSON 版 blkx），
+#                        所以默认编译的解析器必须能读它。
+#   fm-legacy          —— 本地/游戏二进制解包出来的旧 `.blkx` 文本（`key:type = value` + `Foo { }`）。
+#                        **仅作备份：不参与默认编译**，只有显式打开才编译/参与 CI。
+# 两个一起打开（`--features fm-legacy` 叠加默认的 `fm-json`）→ 按**内容**分派
+# （首个非空白字节 `{` 即 JSON，见 `src/parser.rs`）；`src/test_p2_parity.rs::vs_json` 的
+# 回归对照就在这个组合下跑。发布产物**不带** legacy。
+# 两个都关掉 → `compile_error!`（见 lib.rs）：没有任何解析器可用不是合法配置。
+default = ["fm-json"]
+fm-legacy = []
+fm-json = []
+
+[lib]
+name = "wp8f_flightmodel"
+path = "src/lib.rs"
+
+[[bin]]
+name = "flightmodel"
+path = "src/main.rs"
