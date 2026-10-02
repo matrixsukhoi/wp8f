@@ -43,3 +43,6 @@ __pycache__/
 .tmp_*.csv
 flightmodel/*_em*.txt
 flightmodel/*_em*.png
+
+# 编辑器本地配置（VS Code）不入库
+/.vscode/
