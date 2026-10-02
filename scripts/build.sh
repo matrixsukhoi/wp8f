@@ -3,6 +3,8 @@
 # wp8f 交叉编译脚本（在 Linux / WSL 下跑，产出 Windows 可执行文件）
 #
 #   wp8f-gui.exe            控制台（托盘 + 本地 HTTP API + wry/WebView2 窗口），仓库根唯一入口
+#   WebView2Loader.dll      上面那个控制台的运行期依赖（GNU 目标动态链接 loader，MSVC 才静态），
+#                           必须与 exe 同目录 —— 同样落在仓库根
 #   binary/wp8f.exe         HUD 主程序（core + disp）
 #   binary/flightmodel.exe  FM 解析/曲线（GUI 直接读 binary/）
 #   binary/test-server.exe  模拟游戏服务端（拖拽预览用）
@@ -162,6 +164,31 @@ if [[ $BUILD_WIN -eq 1 ]]; then
     cargo "${COMMON[@]}" "${FM_JSON_FEAT[@]}" --target "$WIN_TARGET" "${PKG_ARGS[@]}"
     WIN_OUT="target/$WIN_TARGET/$PROFILE"
 
+    # WebView2 loader：webview2-com-sys 只在 **MSVC** 目标静态链接 loader，非 MSVC（我们）生成的是
+    # 对 WebView2Loader.dll 的**普通导入**，所以它必须和 wp8f-gui.exe 同目录。cargo 只把 SDK 里那份
+    # 复制进依赖自己的 OUT_DIR，不会放到 exe 旁边 —— 少了它用户双击就报"找不到 WebView2Loader.dll"
+    # （issue #1）。开发机 PATH 里若恰好有别人的副本（如 Windows Performance Toolkit）会掩盖缺失，
+    # 所以这一步是硬要求，不做"找不到就算了"。
+    loader_src=""
+    while IFS= read -r -d '' candidate; do
+        if [[ -z "$loader_src" ]]; then
+            loader_src="$candidate"
+        elif ! cmp -s "$loader_src" "$candidate"; then
+            # 依赖缓存里有多份不同内容（换过 crate 版本）：取最近构建的那份，别为这点歧义要求全量重建
+            if [[ "$candidate" -nt "$loader_src" ]]; then
+                loader_src="$candidate"
+            fi
+            warn "缓存里有多份不同的 WebView2Loader.dll，取最近构建的一份：$loader_src"
+        fi
+    done < <(find "$WIN_OUT/build" -type f \
+        -path '*/webview2-com-sys-*/out/x64/WebView2Loader.dll' -print0)
+    if [[ -z "$loader_src" ]]; then
+        fail "找不到 x64 WebView2Loader.dll（GNU 目标的 GUI 运行期必需）：加 --clean 重新构建"
+        exit 1
+    fi
+    cp -f "$loader_src" WebView2Loader.dll
+    ok "WebView2Loader.dll           $(size_of WebView2Loader.dll)（x64，与 GUI 同目录）"
+
     if [[ $WEBUI_ONLY -eq 0 ]]; then
         mkdir -p binary
         cp -f "$WIN_OUT/wp8f-core.exe" binary/wp8f.exe
@@ -261,6 +288,7 @@ summary() {
 echo "    产物（本次构建）"
 if [[ $BUILD_WIN -eq 1 ]]; then
     summary wp8f-gui.exe                "控制台（托盘 + API + WebView2 窗口，单进程；仓库根唯一入口）"
+    summary WebView2Loader.dll          "控制台的 WebView2 loader（与上面那个 exe 同目录，随包分发）"
     summary binary/wp8f.exe             "HUD 主程序"
     summary binary/flightmodel.exe      "FM 解析（GUI 直接用）"
     summary binary/test-server.exe      "模拟服务端"

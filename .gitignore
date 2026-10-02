@@ -1,6 +1,9 @@
 wp8f
 *.exe
 *.zip
+# 控制台的 WebView2 loader（GNU 目标动态链接它，MSVC 目标才是静态链接）：由 build.sh 从
+# webview2-com-sys 的 OUT_DIR 取到仓库根、与 wp8f-gui.exe 同目录 —— 同样是产物，不入库。
+/WebView2Loader.dll
 # 可执行文件目录（S1 布局）：仓库根只留 wp8f-gui.exe（*.exe 已忽略），
 # wp8f.exe / flightmodel.exe / test-server.exe 与 Linux 构建的 wp8f、flightmodel
 # 都由 scripts/build.sh 放这里 —— 整层都是产物，不入库。

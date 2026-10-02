@@ -296,6 +296,10 @@ all_wp8f_pids() -> Vec<u32>, start_reaper(self: Arc<Self>), status_json(webview_
 * **只管子进程里的「自己的」**：按启动时记下的 pid 管理；`status_json` 里的
   `test_server_pid` 只报自己启动的那一个（`-1` = 没有），这是 `api_parity` 的契约字段。
 * **关窗 ≠ 退出**：销毁 WebView、只留托盘（宿主侧 WebView2 运行库常驻，约 25 MB）。
+* **运行期依赖 `WebView2Loader.dll`（非 MSVC 目标）**：`webview2-com-sys` 对 MSVC 目标静态链接
+  loader，其它目标生成的是对 `WebView2Loader.dll` 的普通导入 ⇒ Windows GNU 版的这个 DLL 必须与
+  `wp8f-gui.exe` 同目录（`build.sh` 从依赖 OUT_DIR 取 x64 那份放到仓库根，`zip.sh` 校验它在包里、
+  且是 x64 PE）。缺了它进程根本起不来（issue #1）。
 * **控制通道与 API 都只绑 127.0.0.1**，控制通道另有令牌；界面没有鉴权需求但也不对外暴露。
 * 回放底图**不伪造、不外借**：记录没带底图就不铺底面地图（只留网格线）。
 * 更新器只在**用户二次确认**后才切换目录（`data → data_old`、`data_new → data`），

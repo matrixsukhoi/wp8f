@@ -6,7 +6,8 @@
 #   bash scripts/zip.sh -h           # 打印本说明
 #
 # 清单 = 三组：
-#   ① 可执行文件：wp8f-gui.exe（根，唯一入口）、binary/{wp8f,flightmodel,test-server}.exe
+#   ① 可执行文件：wp8f-gui.exe（根，唯一入口）与它旁边的 WebView2Loader.dll（GNU 目标的
+#      WebView2 loader，缺了双击就报错，见 issue #1）、binary/{wp8f,flightmodel,test-server}.exe
 #      + test-server/scenarios；
 #   ② 运行期读的磁盘资源：gui/static、resource/fonts（只带随包两份字体 + OFL 文本）、
 #      resource/voice（按包：`<语音包>/*.wav`）、resource/lang（HUD 标签表）、
@@ -60,6 +61,7 @@ FONT_FILES=(
 # 必需件：缺任何一个都直接失败，不做"残包"（能解压但少了关键功能最坑人）
 REQUIRED=(
     "wp8f-gui.exe"                          # 控制台（仓库根唯一入口：托盘 + API + WebView2 窗口）
+    "WebView2Loader.dll"                    # 上面那个 exe 的运行期依赖，必须同目录（GNU 目标，见 issue #1）
     "binary/wp8f.exe"                       # HUD 主程序
     "binary/flightmodel.exe"                # FM 解析/曲线（控制台「飞行模型」页签直接调它）
     "binary/test-server.exe"                # 模拟服务端（控制台拖拽预览用）
@@ -90,11 +92,12 @@ if (( ${#missing[@]} > 0 )); then
     for m in "${missing[@]}"; do echo "    - $m" >&2; done
     # 缺可执行文件 = 还没构建（或只跑过 --webui-only，那个模式不产 binary/ 里的三个）
     for m in "${missing[@]}"; do
-        if [[ "$m" == "wp8f-gui.exe" || "$m" == binary/* ]]; then
+        if [[ "$m" == "wp8f-gui.exe" || "$m" == "WebView2Loader.dll" || "$m" == binary/* ]]; then
             cat >&2 <<'EOS'
     → 这几项是构建产物、不是源码，先跑 `bash scripts/build.sh`：
-      wp8f-gui.exe 落在**仓库根**，wp8f.exe / flightmodel.exe / test-server.exe 落在 **binary/**（S1 布局）。
-      只跑过 `bash scripts/build.sh --webui-only` 的话，只有仓库根的 wp8f-gui.exe 存在。
+      wp8f-gui.exe 与 WebView2Loader.dll 落在**仓库根**（两者必须同目录），
+      wp8f.exe / flightmodel.exe / test-server.exe 落在 **binary/**（S1 布局）。
+      只跑过 `bash scripts/build.sh --webui-only` 的话，只有仓库根这两项存在。
 EOS
             break
         fi
@@ -118,6 +121,50 @@ fi
 
 command -v zip >/dev/null 2>&1   || { echo "✗ 找不到 zip（WSL/Ubuntu: sudo apt install zip）" >&2; exit 2; }
 command -v unzip >/dev/null 2>&1 || { echo "✗ 找不到 unzip（校验包内容要用：sudo apt install unzip）" >&2; exit 2; }
+
+# ---- 1.5) 非系统 DLL 依赖审计 ----
+# 显式清单是人手维护的，漏一个**运行期 DLL** 的代价是用户双击直接报错（issue #1 的
+# WebView2Loader.dll 就是这么漏的：GNU 目标的 GUI 动态依赖它，zip 的实参列表里却没有）。
+# 有 objdump 就把每个 exe 的导入表列出来，凡不是系统 DLL、又不在清单里的直接失败。
+OBJDUMP="${OBJDUMP:-x86_64-w64-mingw32-objdump}"
+# 系统 DLL（Windows 自带 + 编译器随产物静态链进去的那几类），不随包分发
+SYS_DLL_RE='^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|comctl32|shlwapi|ws2_32|ntdll|msvcrt|dwmapi|uxtheme|imm32|bcryptprimitives|userenv|dbghelp|version|winmm|psapi|crypt32|iphlpapi|secur32|setupapi|opengl32|ucrtbase|api-ms-win-[a-z0-9-]+|vcruntime[0-9_]*|msvcp[0-9_]*|libgcc_s_[a-z0-9_-]+|libwinpthread-[0-9]+)\.dll$'
+in_manifest() {   # 这个 DLL 是否随包（按文件名比对清单，路径无所谓）
+    local base item
+    base="$(basename "$1")"
+    for item in "${REQUIRED[@]}"; do
+        [[ "$(basename "$item")" == "$base" ]] && return 0
+    done
+    return 1
+}
+if command -v "$OBJDUMP" >/dev/null 2>&1; then
+    audit_bad=()
+    for exe in wp8f-gui.exe binary/*.exe; do
+        [[ -f "$exe" ]] || continue
+        deps="$("$OBJDUMP" -p "$exe" 2>/dev/null | sed -n 's/^[[:space:]]*DLL Name:[[:space:]]*//p' | sort -u)"
+        while IFS= read -r dll; do
+            [[ -n "$dll" ]] || continue
+            grep -qiE "$SYS_DLL_RE" <<<"$dll" && continue
+            in_manifest "$dll" || audit_bad+=("$exe 依赖 $dll（不在清单里）")
+        done <<<"$deps"
+    done
+    # loader 拿错架构比缺文件更难查：顺手确认它是 x64 PE
+    if [[ -f WebView2Loader.dll ]] && ! "$OBJDUMP" -f WebView2Loader.dll 2>/dev/null | grep -q 'pei-x86-64'; then
+        audit_bad+=("WebView2Loader.dll 不是 x64 PE（架构不对，GUI 会加载失败）")
+    fi
+    if (( ${#audit_bad[@]} > 0 )); then
+        echo "✗ 打包中止：以下非系统 DLL 依赖没有随包" >&2
+        for a in "${audit_bad[@]}"; do echo "    - $a" >&2; done
+        cat >&2 <<'EOS'
+    → 真要随包：build.sh 里部署到 exe 旁边 + 本脚本 REQUIRED 里登记；
+      确实是系统自带：补进本段的 SYS_DLL_RE。
+EOS
+        exit 1
+    fi
+    echo "· DLL 依赖审计通过（$(ls wp8f-gui.exe binary/*.exe 2>/dev/null | wc -l) 个 exe，非系统依赖全部在清单内）"
+else
+    echo "! 找不到 $OBJDUMP，跳过 DLL 依赖审计（apt install binutils-mingw-w64-x86-64）" >&2
+fi
 
 # ---- 2) 打新包（先删旧包杜绝残留条目；先在临时目录成型再 mv 到位） ----
 OUT="wp8f-$(date +%Y%m%d).zip"

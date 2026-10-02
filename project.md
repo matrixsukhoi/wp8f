@@ -98,6 +98,7 @@ bash scripts/build.sh -j 8 --online   # 并行度 / 允许联网（默认 --offl
 | 产物 | 说明 |
 |---|---|
 | `wp8f-gui.exe` | 控制台（托盘 + HTTP API + WebView2 窗口）。**双击它就行** |
+| `WebView2Loader.dll` | 上面那个控制台的运行期依赖（GNU 目标动态链接 loader，MSVC 目标才静态）。**必须与 `wp8f-gui.exe` 同目录**，随包分发 |
 | `binary/wp8f.exe` | HUD 主程序（core + disp，bin 名 `wp8f-core`） |
 | `binary/flightmodel.exe` | FM 解析/曲线（控制台直接读 `binary/`） |
 | `binary/test-server.exe` | 模拟服务端（场景仍在 `test-server/scenarios`，按 **cwd** 解析） |
@@ -120,6 +121,13 @@ bash scripts/build.sh -j 8 --online   # 并行度 / 允许联网（默认 --offl
   （`resource/` 只入库 `lang` 与 `i18n`，其余是本地资源）。
 * **构建常见坑**：`wp8f.exe` / `wp8f-gui.exe` 正在运行会锁住 exe，`cp` 报
   `Input/output error` —— 先退出控制台（托盘右键 → 退出）再构建。
+* **GNU 目标的 GUI 必须有 `WebView2Loader.dll` 陪跑**：`webview2-com-sys` 只在 MSVC 目标静态链接
+  loader（那份 `WebView2LoaderStatic.lib` 是 MSVC C++ 目标文件，要 `__security_cookie`、
+  `_Init_thread_*`、MSVC 的 `operator new` 等 CRT 内部符号，GNU ld 链不了），非 MSVC 目标生成的是
+  对 `WebView2Loader.dll` 的普通导入 ⇒ 它必须与 `wp8f-gui.exe` 同目录。`build.sh` 从依赖的
+  OUT_DIR 取 x64 那份复制到仓库根，`zip.sh` 把它当必需件并按导入表审计（历史：issue #1 漏了它，
+  发布包双击报"找不到 WebView2Loader.dll"）。**验证发布包要在干净目录里跑，并清掉 PATH 中可能存在的
+  同名 DLL** —— 开发机装了 Windows Performance Toolkit 之类会带一份旧副本，正好把缺失掩盖掉。
 * **Linux 状态：可编译，未测试**。HUD 在 WSL/Linux 能编译通过，但没有实机验证过运行；
   已知 WSL1 + Xming 跑不起来（winit 0.31 的 X11 后端要求 XInput2）。
   控制台依赖 wry/tao/windows-sys，**不打算支持 Linux**。

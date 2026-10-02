@@ -21,14 +21,23 @@
   `binary/{wp8f,flightmodel,test-server}.exe`；旧布局残留（仓库根或 `test-server/` 下的同名
   exe）由 `drop_legacy` 清掉。默认 `--offline`，`fm-json` 是默认 feature
   （`fm-legacy` 只是备份解析器）。
+* **WebView2 loader（构建的第二步）**。`webview2-com-sys` 只在 **MSVC** 目标静态链接 loader ——
+  `WebView2LoaderStatic.lib` 是 MSVC 编的 C++ 目标文件，要 `__security_cookie`、
+  `_Init_thread_*`、MSVC 的 `operator new` 这些 CRT 内部符号，GNU ld 链不了；
+  非 MSVC 目标生成的是对 `WebView2Loader.dll` 的**普通导入**，运行期必须有这个文件、且与
+  exe 同目录。cargo 只把它放进依赖自己的 `OUT_DIR/<arch>/`，所以 `build.sh` 负责把 x64 那份
+  复制到仓库根（`--webui-only` 同样复制；缓存里多份内容不一致时取最近构建的一份并 `warn`）。
 * **测试（`test.sh`）**。一条 `cargo test --offline --release -p …` 覆盖 6 个 crate，
   靠 `^test result:` / `^test … ` 两套正则分别数「汇总行」与「用例行」—— 两类计数都为 0 视为
   编译/链接失败（否则会打印「全部通过：0 个用例」并假绿）。白名单默认严格：
   `KNOWN_FAIL` 非空时才容忍登记过的历史失败。**不在 WSL 里驱动 GUI**
   （进程环境差异会让托盘/WebView2 探针不稳），`--gui` 只打印 Windows 上的跑法。
-* **打包（`zip.sh`）**。三条硬规则：① 先 `rm` 目标 zip（`zip -r` 是更新语义，同名包会残留
+* **打包（`zip.sh`）**。四条硬规则：① 先 `rm` 目标 zip（`zip -r` 是更新语义，同名包会残留
   已删文件）；② 显式清单，不整目录通吃（尤其 `resource/fonts` 只带 `FONT_FILES` 三个文件
-  —— 那是用户放自备字体的地方）；③ 先打到临时目录，`unzip -Z1` 逐项反查后才 `mv` 到仓库根。
+  —— 那是用户放自备字体的地方）；③ 先打到临时目录，`unzip -Z1` 逐项反查后才 `mv` 到仓库根；
+  ④ **非系统 DLL 依赖审计**：`x86_64-w64-mingw32-objdump -p` 列出每个 exe 的导入，
+  非系统 DLL 又不在 `REQUIRED` 里的直接失败（issue #1 漏掉 `WebView2Loader.dll` 就是这个缺口），
+  顺带确认它是 x64 PE；没有 objdump 只 `warn`。
   `LEAK_RE` 反查泄漏项（`target/`、`logs/`、更新器暂存/回滚目录等）。
 * **探针（`tests/*.py`）**。共同契约：**退出码 2 = 前置不满足**（已有控制台/`wp8f.exe` 在跑、
   产物缺失），1 = 用例失败，0 = 通过；只清理**自己起出来的**进程（绝不 `taskkill` 用户正在用的
@@ -60,9 +69,9 @@
 
 | 路径 | 内容 |
 |---|---|
-| `build.sh` | 交叉编译 + S1 布局归位 + 旧产物清理（用法见文件头 15–23 行） |
+| `build.sh` | 交叉编译 + S1 布局归位 + WebView2 loader 部署 + 旧产物清理（用法见文件头） |
 | `test.sh` | Rust 单测驱动 + 结果计数 + Windows 测试清单 |
-| `zip.sh` | 显式清单打包 + 泄漏反查（用法见文件头 3–37 行） |
+| `zip.sh` | 显式清单打包 + 非系统 DLL 依赖审计 + 泄漏反查（用法见文件头） |
 | `make_icon.py` | logo 生成器：几何常量 → SVG / ICO / favicon（改图形只改这里） |
 | `tests/api_parity.py` | 控制台 HTTP API 与黄金样本比对（`selftest` 自检模式可离线跑） |
 | `tests/diag_console.py` | 对着**已在运行**的控制台做只读体检（唯一不拉新实例的探针） |
