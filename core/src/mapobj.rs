@@ -17,18 +17,19 @@
 //! （`RecordConfig::start_frame`）一律用那个结果；GUI 用同一口径复算滑杆上限
 //! （`gui/static/config-form.js` 里写明了这层对应关系，改口径要两边一起改）。
 //!
-//! ⚠️ **这里曾经还有一层"采样周期约束"**（`map_period_ms ≤ record.poll_ms`，超了就夹到
-//! `poll_ms × refresh_hz / 1000`）：在出厂配置（8 帧 @30 Hz = 266 ms > poll_ms 100 ms）下
-//! 会把 8 夹成 3、把 8 夹成 1 —— 用户明确要求删掉，记录间隔只看 `refresh_hz`，不再看
-//! 记录采样周期。`record.poll_ms` 现在只影响**记录线程自己的采样频率**。
+//! **记录线程的采样周期就是这个值**：`record.poll_ms`（记录频率）已从配置里删除，core 在
+//! `spawn_recorder_thread` 里直接用 `period_ms(生效帧数, refresh_hz)` —— 地图坐标每这么多帧
+//! 才更新一次，记录得比它更快只会写下坐标完全相同的重复帧。
+//! （历史上这里还有一层"采样周期约束"：`map_period_ms ≤ record.poll_ms` 超了就夹，
+//! 出厂配置下会把 8 夹成 3 —— 用户明确要求删掉。现在两者本就是同一个值，不存在互相夹。）
 //!
 //! 单位换算的性质（改之前先看）：毫秒**向下取整**（`frames × 1000 / refresh_hz`，整数除法），
 //! 8 数据帧 @30 Hz → 266 ms；`refresh_hz = 0` 按 1 Hz 处理（不能除零）。
 
 /// 地图记录间隔（数据帧）→ 毫秒（向下取整）。`refresh_hz = 0` 按 1 Hz 处理。
 ///
-/// 只用于**显示/日志**（`[MAPOBJ]` 那行说明夹紧后的 ms 口径）：真正决定记录频率的是
-/// 帧数本身（主循环闸门按帧计数）。数值口径与 GUI 侧 `Math.round(frames * 1000 / hz)` 一致。
+/// 两个用途：**记录线程的采样周期**（core 直接拿它当 `poll_ms`）、以及 `[MAPOBJ]`
+/// 日志里的毫秒口径。数值口径与 GUI 侧 `Math.round(frames * 1000 / hz)` 一致。
 pub fn period_ms(frames: u64, refresh_hz: u32) -> u64 {
     frames.saturating_mul(1000) / refresh_hz.max(1) as u64
 }

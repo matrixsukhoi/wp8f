@@ -7,7 +7,7 @@
    5) 上传接口可用
    6) 配置器：布局/字体拆卡、字号 ≤72、尺寸 ≤1440、滑块右侧数字可手输并夹紧、
       色块在输入框左侧且按 `#RRGGBBAA` 语义换算、颜色键 7 个
-   6b) 联动：HUD 类型互斥、记录频率上限 = 刷新率、地图记录间隔上限 = 1 秒的数据帧数
+   6b) 联动：HUD 类型互斥、地图记录间隔上限 = 1 秒的数据帧数（记录频率滑杆已删除）
    7) 回放 km 尺度：轴名 / 默认 50×50 km / 盒宽深比 / 视野缩放 / 全程自适应
    8) 速度矢量箭头（杆 + 两组倒刺）与飞机姿态线框
    9) 导弹模拟页签（离线 HTML）真的渲染
@@ -663,12 +663,12 @@ try:
         check("告警项已从「面板」卡片移走",
               not ({"voice_warnings_enabled", "warning_blink_hz", "warning_x_color"} & by.get("面板", set())),
               str(sorted(by.get("面板", set()))))
-        check("「飞行记录」卡片：只有录制开关 + 记录频率（零点经纬度/格式键已删除）",
+        check("「飞行记录」卡片：只有录制开关 + 内存池（记录频率滑杆已删除）",
               "飞行记录" in by and "TacView" not in by
-              and "record.enabled" in by["飞行记录"]
+              and "record.enabled" in by["飞行记录"] and "record.pool_mb" in by["飞行记录"]
               and not [k for k in by["飞行记录"] if "origin" in k or k.endswith(".format")]
               and page.eval_on_selector_all('#config-form .card[data-card="飞行记录"] input[data-rec-hz]',
-                                            "els => els.length") == 1,
+                                            "els => els.length") == 0,
               str(sorted(by.get("飞行记录", set()))))
         check("高级编辑只剩按钮（标签已移除）",
               page.eval_on_selector("#json-toggle", "el => el.closest('.item').querySelector('label')") is None)
@@ -704,51 +704,41 @@ try:
         hz0 = page.evaluate("""() => {
           const rr = document.querySelector('input[type=range][data-key="refresh_hz"]');
           const rec = document.querySelector('input[data-rec-hz]');
-          return { refresh: rr ? [rr.min, rr.max, rr.value] : null, rec: rec ? [rec.min, rec.max, rec.value] : null };
-        }""")
-        check("面板卡片有「数据刷新 Hz」(5–60)，飞行记录有记录频率且上限 = 刷新率",
-              bool(hz0["refresh"]) and hz0["refresh"][0] == "5" and hz0["refresh"][1] == "60"
-              and bool(hz0["rec"]) and hz0["rec"][1] == hz0["refresh"][2], str(hz0))
-        # 刷新率降到 10 Hz → 记录频率上限跟着降到 10，且 poll_ms 不小于 100ms（≤10Hz）
-        page.evaluate("""() => { const rr = document.querySelector('input[type=range][data-key="refresh_hz"]');
-          rr.value = '10'; rr.dispatchEvent(new Event('input', { bubbles: true })); }""")
-        page.wait_for_timeout(700)
-        hz1 = page.evaluate("""() => { const rec = document.querySelector('input[data-rec-hz]');
           const c = JSON.parse(document.getElementById('config-json').value);
-          return { recMax: rec.max, recVal: rec.value, pollMs: c.record.poll_ms, refresh: c.refresh_hz }; }""")
-        check("刷新率降到 10 Hz → 记录频率被夹到 ≤10 且 poll_ms ≥100ms（记录频率不超过刷新率）",
-              hz1["recMax"] == "10" and int(hz1["recVal"]) <= 10 and hz1["pollMs"] >= 100, str(hz1))
-        # 还原刷新率（后面的用例还要用配置）
-        page.evaluate("""() => { const rr = document.querySelector('input[type=range][data-key="refresh_hz"]');
-          rr.value = '30'; rr.dispatchEvent(new Event('input', { bubbles: true })); }""")
-        page.wait_for_timeout(700)
+          return { refresh: rr ? [rr.min, rr.max, rr.value] : null,
+                   hasRecSlider: !!rec, recKeys: Object.keys(c.record || {}) };
+        }""")
+        check("面板卡片有「数据刷新 Hz」(5–60)，配置器里没有记录频率控件、配置里也没有该键",
+              bool(hz0["refresh"]) and hz0["refresh"][0] == "5" and hz0["refresh"][1] == "60"
+              and not hz0["hasRecSlider"] and "poll_ms" not in hz0["recKeys"], str(hz0))
 
         # ---- 6c) 地图记录间隔（map_obj_record_every_frames）：每多少**数据帧**记录一次 ----
         # 语义：最小 1 = 每帧记录（= 数据帧刷新率），默认 8。**上限 = 1 秒的数据帧数 = refresh_hz**
-# （30 Hz → 30，5 Hz → 5）。与 record.poll_ms 无关（只看刷新率）。
-        # （max(1, poll_ms × refresh_hz / 1000)）已按用户要求删除 —— 把记录频率拖到 5 Hz
-        # （poll_ms=200，旧口径下上限只剩 6）也不该改变上限。
+        # （30 Hz → 30，5 Hz → 5）。它同时就是飞行记录的采样间隔 —— 记录频率那一项已删除
+        #（地图坐标每这么多帧才更新一次，记更快只会写下坐标相同的重复帧）。
         mo0 = page.evaluate("""() => {
-          const rec = document.querySelector('input[data-rec-hz]');
-          rec.value = '5'; rec.dispatchEvent(new Event('input', { bubbles: true }));
           const rr = document.querySelector('input[type=range][data-key="refresh_hz"]');
           rr.value = '30'; rr.dispatchEvent(new Event('input', { bubbles: true }));
           const r = document.querySelector('input[type=range][data-key="map_obj_record_every_frames"]');
           const lbl = r.closest('.item').querySelector('label');
           const sval = r.parentElement.querySelector('.sval');
           const c = JSON.parse(document.getElementById('config-json').value);
-          return { max: r.max, v: r.value, min: r.min, pollMs: c.record.poll_ms, hz: c.refresh_hz,
+          return { max: r.max, v: r.value, min: r.min, hz: c.refresh_hz,
                    frames: c.map_obj_record_every_frames, label: lbl.textContent,
                    tip: sval.title, edit: sval.dataset.edit || '',
                    editable: sval.classList.contains('sval-edit'),
                    oldKey: 'map_obj_interval_frames' in c,
+                   hasRecSlider: !!document.querySelector('input[data-rec-hz]'),
+                   recKeys: Object.keys(c.record || {}),
                    sval: sval.textContent };
         }""")
         check("地图刷新帧间隔滑杆存在、最小 1（每帧记录）",
               mo0["min"] == "1" and "帧间隔" in mo0["label"] and "刷新" in mo0["label"]
               and not mo0["oldKey"], str(mo0))
-        check("地图刷新帧间隔的上限 = 1 秒的数据帧数（30 Hz → 30），与 record.poll_ms 无关",
-              mo0["pollMs"] == 200 and mo0["hz"] == 30 and mo0["max"] == "30", str(mo0))
+        check("地图刷新帧间隔的上限 = 1 秒的数据帧数（30 Hz → 30）",
+              mo0["hz"] == 30 and mo0["max"] == "30", str(mo0))
+        check("记录频率已删除：没有那张滑杆，配置的 record 段里也没有 poll_ms",
+              not mo0["hasRecSlider"] and "poll_ms" not in mo0["recKeys"], str(mo0["recKeys"]))
         check("上限说明写成“1 秒的数据帧数”，不再提采样周期约束与逐键教程",
               "1 秒的数据帧数" in mo0["tip"] and "最小 1" in mo0["tip"]
               and "采样周期" not in mo0["tip"]
@@ -769,23 +759,10 @@ try:
         check("刷新率降到 10 Hz → 地图记录间隔上限缩到 10 且被夹紧写回（上限 = 1 秒的数据帧数）",
               mo1["max"] == "10" and mo1["v"] == "10" and mo1["sval"] == "10"
               and mo1["frames"] == 10 and "1 秒的数据帧数" in mo1["msg"], str(mo1))
-        # 记录频率（poll_ms）怎么改都不该动上限：拖到 1 Hz（poll_ms=1000）后上限仍是 10
-        mo2 = page.evaluate("""() => {
-          const rec = document.querySelector('input[data-rec-hz]');
-          rec.value = '1'; rec.dispatchEvent(new Event('input', { bubbles: true }));
-          const r = document.querySelector('input[type=range][data-key="map_obj_record_every_frames"]');
-          const c = JSON.parse(document.getElementById('config-json').value);
-          return { max: r.max, v: r.value, pollMs: c.record.poll_ms, frames: c.map_obj_record_every_frames };
-        }""")
-        check("记录频率改成 1 Hz（poll_ms=1000）也不改变地图记录间隔的上限（采样周期约束已删除）",
-              mo2["pollMs"] == 1000 and mo2["max"] == "10" and mo2["v"] == "10"
-              and mo2["frames"] == 10, str(mo2))
-        # 还原：刷新率 30、记录频率 30（poll_ms=33）、地图记录间隔回到进来时的值
+        # 还原：刷新率 30、地图记录间隔回到进来时的值（记录采样周期由 core 现算，配置里没有它）
         page.evaluate("""(orig) => {
           const rr = document.querySelector('input[type=range][data-key="refresh_hz"]');
           rr.value = '30'; rr.dispatchEvent(new Event('input', { bubbles: true }));
-          const rec = document.querySelector('input[data-rec-hz]');
-          rec.value = '30'; rec.dispatchEvent(new Event('input', { bubbles: true }));
           const r = document.querySelector('input[type=range][data-key="map_obj_record_every_frames"]');
           r.value = String(orig); r.dispatchEvent(new Event('input', { bubbles: true }));
         }""", mo0["frames"])

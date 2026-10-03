@@ -283,7 +283,7 @@ function renderForm(content) {
     const v = getv(cfg, key) ?? "";
     groups[g].push(`<div class="item"><label>${label}</label><input type="${type}" data-key="${key}" value="${esc(String(v))}"></div>`);
   };
-  /** 配置里的 core 数据刷新频率（Hz，钳 5..=60），作为记录频率滑杆的上限。 */
+  /** 配置里的 core 数据刷新频率（Hz，钳 5..=60）：地图刷新帧间隔滑杆的上限由它决定。 */
   const refreshHzCfg = () => {
     const v = Math.round(Number(getv(cfg, "refresh_hz") ?? 30));
     return Math.min(Math.max(Number.isFinite(v) && v > 0 ? v : 30, 5), 60);
@@ -315,25 +315,17 @@ function renderForm(content) {
     ).join("");
     groups.panel.push(`<div class="item"><label>${t("cfg.hud_type")}</label><span class="radios">${radios}</span></div>`);
   };
-  // 记录频率（Hz）：配置里存的是 `record.poll_ms`（记录频率 = 轮询频率，只取最新帧），
-  // **上限 = core 数据刷新频率**（比它更快也只能取到同一帧）。
-  const recordHz = () => {
-    const poll = Number(getv(cfg, "record.poll_ms") ?? 100);
-    const maxHz = refreshHzCfg();
-    const hz = Math.min(Math.max(Math.round(1000 / Math.max(poll, 1)), 1), maxHz);
-    groups.record.push(`<div class="item"><label title="${recHzTip(maxHz)}">${t("cfg.lbl.record_hz")}</label>` +
-      `<span class="sld"><input type="range" data-rec-hz min="1" max="${maxHz}" step="1" value="${hz}"><b class="sval">${hz}</b></span></div>`);
-  };
-  const recHzTip = (maxHz) => t("cfg.tip.record_hz", { max: maxHz });
   // 地图记录间隔（配置键 `map_obj_record_every_frames`）：**每多少个数据帧记录一次地图对象**
   // （单位 = 数据帧；毫秒 = 数据帧数 × 1000 / refresh_hz）。最小 1、默认 8，
-  // **上限 = 1 秒的数据帧数 = 刷新率**（与 `record.poll_ms` 无关）。
+  // **上限 = 1 秒的数据帧数 = 刷新率**。
+  // 它同时就是**飞行记录的采样间隔**（记录频率已从配置里删除：地图坐标每这么多帧才更新一次，
+  // 记更快只会写下坐标相同的重复帧），所以这张滑杆一改，`.wpr` 的采样率跟着变。
   // 与 Rust 同一条口径：`wp8f_disp::HudLayoutConfig::map_obj_record_every_frames_clamped`。
   const mapObjRecordEveryMax = (refreshHz) =>
     Math.min(Math.max(Math.round(Number(refreshHz) || 30), 5), 60);
   /** 「地图记录间隔（数据帧）」滑杆的联动夹紧：上限随 `refresh_hz` 变化。
    *  `writeBack = true` 才把夹紧后的值写回 JSON 并提示（用户改动触发）；
-   *  首次渲染只夹**显示值** —— 与记录频率滑杆"显示夹紧、不静默改配置"同一口径。 */
+   *  首次渲染只夹**显示值** —— 不静默改配置，改动只由用户的手来触发。 */
   const syncMapObjRecordEvery = (writeBack) => {
     const form = $("#config-form");
     const r = form && form.querySelector('input[type=range][data-key="map_obj_record_every_frames"]');
@@ -430,8 +422,8 @@ function renderForm(content) {
   textf("datalink", t("cfg.lbl.send_hz"), "datalink.send_hz", "number");
   // 飞行记录（原「TacView」卡片；启用了才展开子项）
   // 飞行记录（`.wpr`：地图信息 + 底图 + 逐帧 DisplayData；导出 ACMI/CSV 在回放页签）
+  // **没有"记录频率"这一项**：采样间隔跟随「地图刷新帧间隔」（见上面那张滑杆）。
   check("record", t("cfg.lbl.record"), "record.enabled");
-  recordHz();
   // 记录内存池的**初始**容量（MiB，默认 8）：记录期间只往内存池追加 CSV 行、结束才写盘
   slider("record", t("cfg.lbl.pool_mb"), "record.pool_mb", 1, 64, 1, 8);
   $("#config-form").innerHTML = CARDS
@@ -457,7 +449,7 @@ function renderForm(content) {
     .join("");
 
   $("#config-form").querySelectorAll("input, select").forEach((inp) => {
-    // 单选组（HUD 类型）与记录频率滑杆没有 data-key：各自的事件处理器在下面单独绑
+    // 单选组（HUD 类型）自己没有 data-key：它的事件处理器在下面单独绑
     if (!inp.dataset.key || inp.type === "radio") return;
     const handler = () => {
       try {
@@ -500,11 +492,8 @@ function renderForm(content) {
           const sub = inp.closest(".card") && inp.closest(".card").querySelector(".sub");
           if (sub) sub.style.display = inp.checked ? "grid" : "none";
         }
-        // 数据刷新频率变了 → 记录频率滑杆的上限跟着变（记录频率不能超过它）
-        if (key === "refresh_hz") syncRecordHz(inp.value);
         // 地图记录间隔 / 数据刷新频率变了 → 地图记录间隔的上限跟着变
         // （上限 = 1 秒的数据帧数 = 刷新率；值超上限会写回 JSON 并提示）。
-// `record.poll_ms` 不在这里（地图记录间隔与它无关）。
         if (key === "map_obj_record_every_frames" || key === "refresh_hz") {
           syncMapObjRecordEvery(true);
         }
@@ -549,52 +538,9 @@ function renderForm(content) {
     });
   });
 
-  // 记录频率滑杆（Hz）：写回 `record.poll_ms`（记录频率 = 轮询频率），
-  // 上限由数据刷新频率决定（`syncRecordHz` 在 refresh_hz 改动时同步这个上限）。
-  $("#config-form").querySelectorAll("input[data-rec-hz]").forEach((r) => {
-    r.addEventListener("input", () => {
-      try {
-        const hz = Math.max(1, Number(r.value) || 1);
-        const c = JSON.parse(cfgJson.value);
-        c.record = c.record || {};
-        c.record.poll_ms = Math.max(1, Math.round(1000 / hz));
-        cfgJson.value = JSON.stringify(c, null, 2);
-        const sv = r.parentElement && r.parentElement.querySelector(".sval");
-        if (sv) sv.textContent = String(hz);
-        scheduleAutoSave();
-      } catch (e) { setMsg(t("cfg.sync_failed", { err: e }), false); }
-    });
-  });
+  // 记录频率（`record.poll_ms`）已经删除：采样间隔跟随「地图刷新帧间隔」，
+  // 由 core 用 `mapobj::period_ms(帧数, refresh_hz)` 现算，这里不再有对应控件。
 
-  /** 数据刷新频率变化时同步记录频率滑杆：上限 = refresh_hz；超出的值夹紧并写回 poll_ms。 */
-  const syncRecordHz = (refreshHzVal) => {
-    const r = $("#config-form").querySelector("input[data-rec-hz]");
-    if (!r) return;
-    const maxHz = Math.min(Math.max(Math.round(Number(refreshHzVal) || 30), 5), 60);
-    // **先读旧值再改 max**：给 range 设 max 会把越界的 value 自动夹掉（读到 10 就永远
-    // "没超限"了），于是 poll_ms 不会被写回 —— 这条与 syncMapObjRecordEvery 是同一个坑。
-    const prevHz = Math.max(1, Math.round(Number(r.value) || 1));
-    r.max = String(maxHz);
-// 滑杆值就是**记录频率（Hz）**，不是 `round(1000 / ms)`：
-    // 值是 5 Hz 时会算成 200 Hz > 上限，于是"刷新率降到 10 Hz"反而把记录频率**抬高**到
-    // 10 Hz（poll_ms 200 → 100），与"不能超过数据刷新频率"的本意相反。
-    let hz = prevHz;
-    if (hz > maxHz) {
-      hz = maxHz;
-      r.value = String(hz);
-      try {
-        const c = JSON.parse(cfgJson.value);
-        c.record = c.record || {};
-        c.record.poll_ms = Math.max(1, Math.round(1000 / hz));
-        cfgJson.value = JSON.stringify(c, null, 2);
-        setMsg(t("cfg.msg.record_hz_clamped", { max: maxHz }), false);
-      } catch (e) { /* 忽略：自动保存会兜底 */ }
-    }
-    const sv = r.parentElement && r.parentElement.querySelector(".sval");
-    if (sv) sv.textContent = String(hz);
-    const lbl = r.closest(".item") && r.closest(".item").querySelector("label");
-    if (lbl) lbl.title = recHzTip(maxHz);
-  };
 
   // 点右侧数字 → 手动输入数值：临时在数字位置放一个 number 输入框，
   // 回车/失焦提交（夹紧到 min–max 后写回 range，复用上面的同步逻辑），Esc 取消。
@@ -650,7 +596,7 @@ function renderForm(content) {
   });
 
   // 首次渲染：把地图记录间隔的滑杆按 **1 秒的数据帧数（= 数据刷新率）** 的上限**夹显示值**
-  //（配置里写了超上限的值时，滑块不会显示成越界值；不在这里静默改配置，与记录频率同一口径）
+  //（配置里写了超上限的值时，滑块不会显示成越界值；不在这里静默改配置，改动只由用户触发）
   syncMapObjRecordEvery(false);
 }
 

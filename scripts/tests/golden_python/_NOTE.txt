@@ -4,6 +4,14 @@
 这些样本原本是"旧 Python 实现"的响应，用于换实现时逐字段比对。Python 实现早已移除，
 现在它们的作用是**冻结的回归样本**：新实现跑出来必须与之一致。
 
+2026-10-02 因「删除记录频率配置（`record.poll_ms`）」重新同步了 1 处：
+
+* `config_default.json` —— 内嵌的 `config/default.json` 文本去掉了 `record.poll_ms`
+  （记录采样周期改为跟随地图刷新：`map_obj_record_every_frames × 1000 / refresh_hz`，
+  见 `core/src/main.rs::spawn_recorder_thread`）。其余键一字未动。
+* 同一次改动还删掉了 15 份 `resource/i18n/*.json` 里的 `cfg.lbl.record_hz` /
+  `cfg.tip.record_hz` / `cfg.msg.record_hz_clamped`（配置器不再有那张滑杆）。
+
 2026-10-02 因「配置提交成 mini、样本还冻结在 circle」重新同步了 1 处（**唯一一次动了内容**）：
 
 * `config_default.json` —— 内嵌的 `config/default.json` 文本按**仓库当前文件**重新取了一份：

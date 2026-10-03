@@ -22,9 +22,13 @@
   meta + 各组 CSV + 底图拼成一个 `.wpr` 一次写出 —— 既没有逐帧 I/O，也不用在结尾再做
   一遍全量序列化。内存池按 `pool_mb` 预分配（默认 8 MiB/组），写满自动扩容。
 * **采样口径 = 轮询口径**。线程只取环形缓冲区里**最新**一帧，从不 drain 历史帧，
-  所以「记录频率 = `poll_ms`（默认 100 ms）」，帧率高于记录频率时多出来的帧计入
+  所以「记录频率 = 轮询频率」，帧率高于记录频率时多出来的帧计入
   `skipped`（正常现象，不是丢帧）。一轮轮询之间写端绕过一整圈（超过槽数）导致读到
   混合帧时计入 `overwritten`。
+* **`poll_ms` 由调用方（core）给出，不是配置项**：core 直接取地图刷新周期
+  （`period_ms(map_obj_record_every_frames, refresh_hz)`，默认 8 数据帧 @30 Hz = 266 ms）——
+  地图坐标每这么多帧才更新一次，记更快只会写下坐标完全相同的重复帧。logger 自己不认识
+  任何配置默认值；`RecordConfig::default()` 里的 100 ms 只是给独立使用者的兜底。
 * **起始门槛**（`map_ready`）：`DisplayData.frame > start_frame` 才开始记。本机地图坐标
   在地图对象采样到位前是初值 `(0.5, 0.5)`，不设门槛的话录制开头会记成地图中心、
   回放时「闪现」到真实位置。`start_frame` 由 core 传入（= 生效的地图记录间隔帧数），
@@ -94,8 +98,9 @@ offset 20+4G ...     meta | csv[0] | csv[1] | … | csv[G-1] | img
 ## 关键函数 Specification
 
 ### `spawn_recorder(cfg: RecordConfig, reader: FrameReader) -> Option<RecordHandle>`
-* 输入：`cfg` —— `{ enabled, output_dir, poll_ms, pool_mb, start_frame }`（core 从布局配置的
-  `record` 段搬来，见下）；`reader` —— 帧环形缓冲区的消费端（core 在窗口建好后给出）。
+* 输入：`cfg` —— `{ enabled, output_dir, poll_ms, pool_mb, start_frame }`（core 从布局配置搬来：
+  `enabled` / `output_dir` / `pool_mb` 取自 `record` 段，`poll_ms` 与 `start_frame` 由 core 按
+  地图刷新周期现算）；`reader` —— 帧环形缓冲区的消费端（core 在窗口建好后给出）。
 * 输出：`Some(句柄)`；`enabled == false` 时 `None`（调用方据此跳过记录，无需自己判配置）。
 * 前置：`reader` 指向的环在生产端仍在写（单生产端契约由 `ring` 保证）。
 * 后置：线程已启动，输出目录在**收尾时**才创建；`poll_ms == 0` 钳到 1 ms，
@@ -168,9 +173,10 @@ offset 20+4G ...     meta | csv[0] | csv[1] | … | csv[G-1] | img
 * **非有限值一律归零**（`fin()`）写进 CSV，避免 `NaN` 传染下游回放/转换。
 * **写盘失败只报错不重试**：`[RECORD] write failed (...)` 一行 `eprintln!`，本次记录丢失，
   不影响飞行；目录创建失败同理。
-* 记录线程的频率上限就是 `poll_ms`（默认 10 Hz）：这不是「丢帧」，是设计口径。
+* 记录频率就是轮询频率（`poll_ms`，core 按地图刷新周期给出，默认 266 ms ≈ 3.8 Hz）：
+  帧率高于它时多出来的帧计入 `skipped`，这不是「丢帧」，是设计口径。
 * 配置项在布局配置的 `record` 段（`disp::HudLayoutConfig`）：`enabled` / `output_dir`
-  （空 = `./logs`）/ `poll_ms` / `pool_mb`；文件名 `wp8f_<unix_ms>.wpr`。
+  （空 = `./logs`）/ `pool_mb`；**没有记录频率这一项**（跟随地图刷新）；文件名 `wp8f_<unix_ms>.wpr`。
 
 ## 测试
 

@@ -330,7 +330,8 @@ fn check_invalid(reason: ExitReason, msg: &str, count: &mut u64) -> Option<ExitR
 /// 1. 钳制：`1..=refresh_hz`（夹紧实现在 `wp8f_disp` 侧，与 `refresh_hz` 放一起）；
 /// 2. 真被改动时打一行 `[MAPOBJ]`，顺带用 `wp8f_core::mapobj::period_ms` 报出毫秒口径。
 ///
-/// ⚠️ 与 `record.poll_ms` 无关：后者只影响记录线程自己的采样频率。
+/// 它同时是**记录线程的采样周期**（见 [`spawn_recorder_thread`]）：记录频率不开放配置，
+/// 只跟随地图刷新 —— 地图坐标每这么多帧才更新一次，记更快只会得到重复坐标。
 /// 每次连接算一次（配置是启动时读的，但重连后理论上可被控制台改写）。
 fn effective_map_obj_frames() -> u64 {
     let cfg = wp8f_disp::hud_layout();
@@ -351,25 +352,22 @@ fn effective_map_obj_frames() -> u64 {
 
 /// 创建一次连接的飞行记录线程 —— core 侧唯一的记录接口。
 ///
-/// core 只做三件事：把布局配置的 `record` 段搬进 [`RecordConfig`]、填"记录起点帧号"
-/// （= 生效的地图对象采样周期）、把 `DisplayData` 环形缓冲区的消费端交出去。
+/// core 只做三件事：把布局配置的 `record` 段搬进 [`RecordConfig`]、算**记录采样周期**、
+/// 把 `DisplayData` 环形缓冲区的消费端交出去。
 /// 单位换算/经纬度/文件格式全在 `wpr` crate 与 GUI 转换器里，主循环里没有文件句柄、也没有写盘点。
+///
+/// **记录频率不开放配置**：地图坐标每 `map_obj_record_every_frames` 个数据帧才更新一次，
+/// 记录得比它更快只会写下坐标完全相同的重复帧 —— 所以采样周期直接取地图刷新周期
+/// （[`wp8f_core::mapobj::period_ms`]，8 帧 @30 Hz = 266 ms）。顺带保证它 ≥ 一个主循环节拍
+/// （帧数下限是 1），不会出现"一轮询只取到同一帧"的空转。
 ///
 /// `None` = 未启用，或窗口没建起来（`RING_BUFFER` 未初始化，此时 `begin_frame()` 也拿不到数据）。
 fn spawn_recorder_thread(map_obj_frames: u64) -> Option<RecordHandle> {
     let cfg = wp8f_disp::hud_layout();
     let r = &cfg.record;
     let reader = wp8f_disp::frame_reader()?;
-    // 记录频率不能超过 core 的数据刷新频率：`poll_ms` 至少是一个主循环节拍，
-    // 否则"只取最新帧"也只能取到同一帧（UI 侧同样按这个上限钳制，这里是二道保险）。
-    let min_poll_ms = (cfg.refresh_interval_ns() / 1_000_000).max(1);
-    let poll_ms = r.poll_ms.max(min_poll_ms);
-    if poll_ms != r.poll_ms {
-        eprintln!(
-            "[RECORD] record.poll_ms={} is faster than the data refresh rate ({} Hz -> min {} ms); recording at {} ms",
-            r.poll_ms, cfg.refresh_hz_clamped(), min_poll_ms, poll_ms
-        );
-    }
+    // 记录采样周期 = 地图刷新周期（唯一换算入口；`max(1)` 兜住 refresh_hz=0 的极端配置）
+    let poll_ms = wp8f_core::mapobj::period_ms(map_obj_frames, cfg.refresh_hz_clamped()).max(1);
     spawn_recorder(
         RecordConfig {
             enabled: r.enabled,
@@ -871,7 +869,7 @@ mod tests {
     use super::*;
 
     /// 生效的地图记录间隔走完整条链路：缺键默认 8 数据帧 @30 Hz = 266 ms，在 `1..=30` 内
-    /// → 原样生效、不夹也不打 `[MAPOBJ]`。
+    /// → 原样生效、不夹也不打 `[MAPOBJ]`。记录线程的采样周期取的就是这个 266 ms。
     ///
     /// 这里读 `HudLayoutConfig::default()`（bin 的测试进程没人 `init_hud_layout`），
     /// 所以断言的是"缺键默认值"这一档，不受 `config/*.json` 影响。
@@ -879,7 +877,6 @@ mod tests {
     fn effective_map_obj_frames_is_only_capped_by_refresh_hz() {
         let cfg = wp8f_disp::hud_layout();
         assert_eq!(cfg.map_obj_record_every_frames_clamped(), 8, "内置默认 = MAP_OBJ_INTERVAL_FRAME");
-        assert_eq!(cfg.record.poll_ms, 100, "内置默认 poll_ms");
         assert_eq!(cfg.refresh_hz_clamped(), 30);
 
         let frames = effective_map_obj_frames();

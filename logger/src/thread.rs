@@ -3,7 +3,9 @@
 //! 只做两件事：按 `poll_ms` 把最新一帧**原样**记成一行、stop 时把「地图信息 + 底图 + 各组 CSV」
 //! 打包成 `.wpr` 落盘。不认识任何外部格式，也不做单位/符号换算。
 //!
-//! 采样口径：只取最新帧、不 drain 历史帧 → **记录频率 = 轮询频率**（`poll_ms`，默认 100 ms）。
+//! 采样口径：只取最新帧、不 drain 历史帧 → **记录频率 = 轮询频率**。`poll_ms` 由调用方给出，
+//! core 传的是**地图刷新周期**（`period_ms(map_obj_record_every_frames, refresh_hz)`，
+//! 默认 8 数据帧 @30 Hz = 266 ms）—— 地图坐标每这么多帧才更新一次，记更快只会写下重复坐标。
 //!
 //! 起始口径：`DisplayData.frame` > `RecordConfig::start_frame` 才开始记 —— 本机位置在地图对象
 //! 采样到位前是初值 `(0.5, 0.5)`，不跳过的话录制开头会记成地图中心、回放时"闪现"到真实位置
@@ -40,6 +42,7 @@ pub struct RecordConfig {
     /// 输出目录；空 = `./logs`
     pub output_dir: String,
     /// 轮询间隔（ms）。**记录频率 = 轮询频率**；0 会被钳到 1 ms。
+    /// core 传的是地图刷新周期（见文件头的采样口径），本 crate 不读任何配置文件。
     pub poll_ms: u64,
     /// 每组 CSV 内存池的初始容量（MiB）；0 → 用 [`wpr::DEFAULT_POOL_MB`]。
     pub pool_mb: u32,

@@ -182,7 +182,8 @@ fn default_hint_color() -> u32 { 0x66A2_9826 }
 fn default_alert_color() -> u32 { 0x66A2_2619 }
 fn default_stroke_color() -> u32 { 0x66002814 }
 fn default_warning_blink_hz() -> f32 { 4.0 }
-/// core 数据刷新频率的下限 / 上限（Hz）。上限也是 Tacview 记录频率的上限。
+/// core 数据刷新频率的下限 / 上限（Hz）。上限同时决定地图记录间隔的上限（1 秒的数据帧数）
+/// 与记录采样率的上限（记录周期最小 = 一个主循环节拍）。
 pub const REFRESH_HZ_MIN: u32 = 5;
 pub const REFRESH_HZ_MAX: u32 = 60;
 fn default_refresh_hz() -> u32 { 30 }
@@ -214,6 +215,11 @@ fn default_voice_path() -> String {
 ///
 /// 记录写成 wp8f 自有的 `.wpr`（地图信息 + 底图 + N 组逐帧 CSV）；归一化地图坐标原样入档，
 /// 导出 ACMI/CSV 时由 GUI 的转换器现算（容器与列义见 `logger`）。
+///
+/// **没有"记录频率"这一项**：记录线程的采样周期 = 地图刷新周期
+/// （`map_obj_record_every_frames × 1000 / refresh_hz`，唯一换算入口是
+/// `core/src/mapobj.rs::period_ms`）。地图坐标每 `map_obj_record_every_frames` 个数据帧才更新
+/// 一次，记录得比它更快只会写下坐标完全相同的重复帧 —— 所以这条口径不开放配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordConfig {
     /// 启用飞行记录
@@ -222,17 +228,12 @@ pub struct RecordConfig {
     /// 输出目录（空 = ./logs）
     #[serde(default)]
     pub output_dir: String,
-    /// 记录线程轮询间隔（ms）。**记录频率 = 轮询频率**（只取最新帧、不 drain 历史帧），
-    /// 且至少是一个主循环节拍。默认 100 = 10 Hz；33 ≈ 主循环的 30 Hz（体积约 3 倍）。
-    #[serde(default = "default_record_poll_ms")]
-    pub poll_ms: u64,
     /// 每组 CSV 内存池的**初始**容量（MiB，默认 8）：记录期间只往内存里追加行、写满自动扩容。
-    /// 按 `poll_ms=33` 估算：1 MiB ≈ 1500 行 ≈ 50 s。
+    /// 按默认采样周期（8 数据帧 @30 Hz = 266 ms）估算：1 MiB ≈ 1500 行 ≈ 6.5 分钟。
     #[serde(default = "default_record_pool_mb")]
     pub pool_mb: u32,
 }
 
-fn default_record_poll_ms() -> u64 { 100 }
 fn default_record_pool_mb() -> u32 { 8 }
 
 impl Default for RecordConfig {
@@ -240,7 +241,6 @@ impl Default for RecordConfig {
         Self {
             enabled: false,
             output_dir: String::new(),
-            poll_ms: default_record_poll_ms(),
             pool_mb: default_record_pool_mb(),
         }
     }
@@ -370,7 +370,7 @@ pub struct HudLayoutConfig {
     /// 频率。缺省 30，钳到 [`REFRESH_HZ_MIN`]..=[`REFRESH_HZ_MAX`]。
     ///
     /// ⚠️ 帧计数类常量（地图记录间隔、语音告警检查 8 帧、告警保持 30 帧）按**帧**算，
-    /// 改本值它们的**时间口径一起变**；`record.poll_ms` 的下限也是本值。
+    /// 改本值它们的**时间口径一起变**；记录线程的采样周期（= 地图刷新周期）也跟着变。
     #[serde(default = "default_refresh_hz")]
     pub refresh_hz: u32,
     /// **地图记录间隔（数据帧）**：本机地图位置、友军快照、地图对象列表每多少数据帧记一次
@@ -2262,16 +2262,15 @@ mod tests {
         assert!(!out.reset);
     }
 
-    /// 旧配置（`config/*.json` 里没有 `poll_ms` 键）必须照常工作：缺键取 100 ms 默认值。
+    /// 旧配置（`config/*.json`）里还能见到 `record.poll_ms`（记录频率）——
+    /// 这个键已删除，写了也只当没写；序列化回去不再出现。
     #[test]
-    fn record_poll_ms_defaults_to_100_when_key_missing() {
-        let missing: RecordConfig = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
-        assert_eq!(missing.poll_ms, 100, "缺 poll_ms 键应取默认 100 ms（老配置无需改动）");
-        assert_eq!(missing.poll_ms, RecordConfig::default().poll_ms, "缺键默认值与 Default 同源");
-
-        let explicit: RecordConfig =
-            serde_json::from_str(r#"{"enabled":true,"poll_ms":33}"#).unwrap();
-        assert_eq!(explicit.poll_ms, 33, "配置里写了 poll_ms 必须生效（33 → ≈30 Hz）");
+    fn record_poll_ms_key_is_ignored() {
+        let old: RecordConfig = serde_json::from_str(r#"{"enabled":true,"poll_ms":33}"#).unwrap();
+        assert!(old.enabled, "老配置必须照常能读（未知键忽略）");
+        assert_eq!(old.pool_mb, RecordConfig::default().pool_mb, "其它键取默认值");
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(!json.contains("poll_ms"), "记录频率不再写回配置：{json}");
     }
 
     /// **记录端底图的回归守卫**：`set_map_image` 必须把"解码 RGB / 原始字节 / 像素尺寸"三份
@@ -2290,13 +2289,13 @@ mod tests {
         assert_eq!((got.rgb.len(), got.raw.len()), (3, 4), "两份各自独立");
     }
 
-    /// 记录配置：段名是 `record`，且**没有** origin_lat/origin_lon/format ——
-    /// 那些概念不属于 wp8f 的记录格式（旧键一律按未知字段忽略）。
+    /// 记录配置：段名是 `record`，且**没有** origin_lat/origin_lon/format/poll_ms ——
+    /// 那些概念不属于 wp8f 的记录格式（旧键一律按未知字段忽略；记录频率跟随地图刷新）。
     #[test]
     fn record_section_has_no_legacy_keys() {
         let new: HudLayoutConfig =
-            serde_json::from_str(r#"{"record":{"enabled":true,"poll_ms":50}}"#).unwrap();
-        assert!(new.record.enabled && new.record.poll_ms == 50);
+            serde_json::from_str(r#"{"record":{"enabled":true,"pool_mb":8}}"#).unwrap();
+        assert!(new.record.enabled && new.record.pool_mb == 8);
 
         // 旧键必须被忽略（serde 默认忽略未知字段）：读出来是默认值，而不是报错
         let old: HudLayoutConfig =
@@ -2309,6 +2308,7 @@ mod tests {
         assert!(!json.contains("tacview"), "不该出现旧段名：{json}");
         assert!(!json.contains("origin_"), "零点经纬度已从配置里删除：{json}");
         assert!(!json.contains("\"format\""), "不再有输出格式选项：{json}");
+        assert!(!json.contains("poll_ms"), "记录频率已删除（跟随地图刷新）：{json}");
     }
 
     /// core 数据刷新频率：默认 30 Hz（= 历史固定节拍），越界钳制，缺键走默认。
@@ -2331,13 +2331,13 @@ mod tests {
         assert_eq!(c.refresh_hz_clamped(), REFRESH_HZ_MAX);
         assert_eq!(c.refresh_interval_ns(), 1_000_000_000 / REFRESH_HZ_MAX as u64);
 
-        // 上限 60 Hz 同时也是 Tacview 记录频率的上限：节拍不会小到 0
+        // 上限 60 Hz 也是记录采样率的上限（记录周期最小 = 一个节拍）：节拍不会小到 0
         c.refresh_hz = REFRESH_HZ_MAX;
         assert!(c.refresh_interval_ns() >= 16_666_666, "60 Hz 的节拍");
     }
 
     /// 地图记录间隔：默认值来自常量（不许抄字面量）、钳制区间 `1..=refresh_hz`、缺键走同一个默认。
-    /// 判据只看刷新率，与 `record.poll_ms` 无关。
+    /// 判据只看刷新率；记录线程的采样周期跟随本值（core 侧 `mapobj::period_ms` 现算）。
     #[test]
     fn map_obj_record_every_frames_defaults_to_the_constant_and_clamps_to_refresh_hz() {
         let mut c = HudLayoutConfig::default();
@@ -2388,17 +2388,5 @@ mod tests {
         assert_eq!(c.map_obj_record_every_frames_clamped(), REFRESH_HZ_MIN as u64);
         c.refresh_hz = 1000;
         assert_eq!(c.map_obj_record_every_frames_clamped(), REFRESH_HZ_MAX as u64);
-
-        // 与 record.poll_ms **无关**：把它调到极端值也不改变生效的地图记录间隔
-        c.refresh_hz = 30;
-        c.map_obj_record_every_frames = 8;
-        let want = c.map_obj_record_every_frames_clamped();
-        for poll in [1u64, 33, 100, 1000, u64::MAX] {
-            c.record.poll_ms = poll;
-            assert_eq!(
-                c.map_obj_record_every_frames_clamped(), want,
-                "poll_ms={poll} 不再参与地图记录间隔的上限（采样周期约束已删除）"
-            );
-        }
     }
 }

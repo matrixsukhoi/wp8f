@@ -133,14 +133,16 @@ HUD 的**唯一数据生产端**：从本地 8111 端口拉取游戏状态 → �
   map_obj_record_every_frames_clamped()` 的结果），主循环闸门、`FlightContext` 初值、
   记录起点 `RecordConfig::start_frame` **三处必须同源**。
 * `period_ms`：`frames × 1000 / refresh_hz`（整数除法，向下取整；8 帧 @30 Hz → 266 ms；
-  `refresh_hz = 0` 按 1 Hz 处理，不除零）。
+  `refresh_hz = 0` 按 1 Hz 处理，不除零）。记录线程的采样周期也用它（见下）。
 * 错误：无。副作用：无（纯函数）。
 
 ### `fn spawn_recorder_thread(map_obj_frames: u64) -> Option<RecordHandle>`（bin）
 * 前置：窗口已建（`wp8f_disp::frame_reader()` 才有值）；配置 `record.enabled`。
 * 输出：`None` = 未启用或拿不到帧读句柄（不记录，不影响飞行）。
-* 后置：记录线程按 `record.poll_ms` 采样；`map_obj_frames` 作为记录起点（跳过
-  本机地图坐标还是初值的开头几帧）。错误：不返回 `Result`，失败在 logger 侧打日志。
+* 后置：记录线程按**地图刷新周期**采样（`mapobj::period_ms(生效帧数, refresh_hz)`，
+  默认 8 帧 @30 Hz = 266 ms —— **记录频率不开放配置**：地图坐标每这么多帧才更新一次，
+  记更快只会写下坐标相同的重复帧）；`map_obj_frames` 作为记录起点（跳过本机地图坐标
+  还是初值的开头几帧）。错误：不返回 `Result`，失败在 logger 侧打日志。
 
 ### `fn spawn_link_thread(l8: &DataLinkConfig) -> Option<LinkHandle>`（bin）
 * 前置：`link_ring::init_slots()` 已调用；配置 `datalink.enabled`。

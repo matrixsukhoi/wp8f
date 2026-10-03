@@ -218,12 +218,14 @@ bash scripts/test.sh --gui               # 只打印 Windows 侧探针的跑法�
 | `ring.frames` | 32 | 帧环槽数（`DisplayData`）。消费者能落后多少数据帧；30 Hz 下 32 ≈ 1 s |
 | `ring.map_samples` | 32 | 地图环槽数（`MapDisplay`）。4 Hz 采样下 32 ≈ 8 s |
 | `map_obj_record_every_frames` | 8 | **每多少个数据帧**记录一次地图对象；钳 `1..=refresh_hz` |
-| `record.poll_ms` | 100 | 记录线程自己的采样间隔（记录频率 = 轮询频率） |
 
 * 槽数钳 `2..=256`（`RingConfig::*_clamped`）；调大只多占内存（启动时一次性分配）。
 * `overwritten=` 统计按**实际槽数**判定：一轮轮询之间的新帧数 `skipped + 1 > slots`。
 * 地图记录间隔的唯一换算入口是 `core/src/mapobj.rs::period_ms`（毫秒 = `帧数 × 1000 / refresh_hz`）；
   记录起点、主循环闸门、`FlightContext` 初值三处必须同源。
+* **没有单独的"记录频率"配置**（旧键 `record.poll_ms` 已删除）：记录线程的采样周期就用
+  `period_ms(生效帧数, refresh_hz)` = 地图刷新周期。地图坐标每 `map_obj_record_every_frames`
+  个数据帧才更新一次，记录得比它更快只会写下坐标完全相同的重复帧。
 
 ### `.wpr` 飞行记录
 
