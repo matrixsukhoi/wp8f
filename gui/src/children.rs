@@ -148,6 +148,10 @@ impl Children {
     /// 用户以为点了没反应，也把预览里刚拖好的位置连同进程一起丢掉。
     /// 要换配置/换模式：先用托盘的「停止 HUD」把它停掉（或直接在 HUD 窗口按 ESC 退出）。
     /// 用户自己开的 wp8f.exe 一律不动（判据见 [`Self::stop_wp8f`]）。
+    ///
+    /// **预览用的模拟服务端会先让位**：非预览启动（点「开 始」）时，若自己启动的 test-server
+    /// 还在跑，先结束它再起 wp8f —— 它占着 8111，HUD 一连上去读到的就是模拟数据而不是真游戏。
+    /// 预览启动（`drag`）则相反：那个 test-server 正是数据源，复用/新起，不收。
     pub fn launch_wp8f(&self, config: &str, drag: bool, console: bool) -> Result<(u32, Option<u32>), String> {
         if let Some(pid) = self.own_wp8f() {
             return Err(format!(
@@ -166,6 +170,16 @@ impl Children {
         let exe = self.root.join("binary").join("wp8f.exe");
         if !exe.is_file() {
             return Err(format!("wp8f 可执行文件不存在: {}", exe.display()));
+        }
+        // 非预览启动：先把预览服务端收掉（只收自己启动的那个，别人的一律不动）。
+        // 放在 exe 检查之后：缺件这种必失败的路径上不该顺手改进程状态。
+        if let Some(pid) = preview_server_to_stop(drag, self.own_test_server()) {
+            if self.kill_test_server() == Some(pid) {
+                crate::log(&format!(
+                    "启动 HUD 前先结束自己启动的 test-server pid={pid}\
+                     （它占着 8111，会让 HUD 读到模拟数据）"
+                ));
+            }
         }
         let test_server = if drag { self.ensure_test_server() } else { None };
         let cfg = if config.is_empty() {
@@ -394,6 +408,19 @@ fn reap_decision(wp8f: Option<u32>, test_server: Option<u32>, alive: &dyn Fn(u32
     }
 }
 
+/// 启动 wp8f 之前要不要先收掉预览用的模拟服务端？（纯函数，便于单测）
+///
+/// 非预览启动（点「开 始」）要让 HUD 连**真游戏**的 8111；自己启动的 test-server 还占着那个
+/// 端口的话，HUD 读到的是模拟数据 ⇒ 先收掉它、再起 wp8f。预览启动则相反：那个 test-server
+/// 正是数据源（复用/新起见 `ensure_test_server`），绝不能收。
+fn preview_server_to_stop(drag: bool, own_test_server: Option<u32>) -> Option<u32> {
+    if drag {
+        None
+    } else {
+        own_test_server
+    }
+}
+
 /// 读日志末尾若干行：只从文件尾部读固定字节数，不把整个日志读进内存
 /// （logs/wp8f.log 跑久了能到几十 MB）
 fn log_tail(path: &Path, max_lines: usize) -> String {
@@ -466,6 +493,16 @@ mod tests {
         assert_eq!(reap_decision(Some(1), None, &alive(&[])), Reap::Idle);
         assert_eq!(reap_decision(None, Some(2), &alive(&[2])), Reap::Idle);
         assert_eq!(reap_decision(None, None, &alive(&[])), Reap::Idle);
+    }
+
+    /// 点「开 始」（非预览）要先收掉自己启动的预览服务端：它占着 8111，
+    /// HUD 连上去读到的会是模拟数据；预览启动则必须留着它当数据源。
+    #[test]
+    fn preview_server_is_stopped_before_a_plain_launch_only() {
+        assert_eq!(preview_server_to_stop(false, Some(7)), Some(7), "非预览：先收掉它");
+        assert_eq!(preview_server_to_stop(false, None), None, "本来就没在跑");
+        assert_eq!(preview_server_to_stop(true, Some(7)), None, "预览：它正是数据源，不能收");
+        assert_eq!(preview_server_to_stop(true, None), None);
     }
 
 /// reaper 的判据不看"全机还有没有 wp8f.exe"（看就会漏杀）。

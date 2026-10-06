@@ -42,7 +42,8 @@ wp8f-gui.exe              控制台（单进程）：系统托盘 + 本地 HTTP 
   供外部脚本/探针做 `wp8f/launch|stop`、`window/show|close`、`exit`。
 - **拖拽预览是双向兜底回收**：预览模式下控制台同时管 wp8f 与 test-server，
   常驻 reaper 每 3 s 轮询，**任一退出就把配套的另一个一起收**（否则会留下僵尸 test-server）；
-  非预览启动不带 test-server。
+  非预览启动不带 test-server，而且点「开 始」时若自己启动的 test-server 还在跑
+  **先收掉它**（它占着 8111，HUD 连上去读到的会是模拟数据，不是真游戏）。
 - **一个控制台只允许一个自己启动的 wp8f（预览时再加一个 test-server）**：
   已经在跑就直接**启动失败**（500 + 人话原因），不再"先杀掉上一批再起新的" ——
   那会把预览里刚拖好的位置连同进程一起丢掉。要换配置/换模式先停止它
@@ -105,6 +106,8 @@ bash scripts/build.sh    # 加 --webui-only 只构建控制台
 - **点「开始」/「预 览」**：按当前配置启动新的 —— 但如果**本控制台已经有一个自己的 wp8f 在跑**，
   直接返回失败（500 + 原因），不替你杀进程（预览里刚拖好的位置不该被悄悄丢掉）。
   想换配置：先停掉它（预览按 ESC / 托盘「显示窗口」会先结束自己启动的 wp8f）。
+  **预览服务端会让位**：非预览启动时自己启动的 test-server 还活着 → 先结束它再起 HUD
+  （它占着 8111，否则 HUD 读到的是模拟数据；预览启动相反，那个 test-server 正是数据源）。
   别人的 `wp8f.exe` / `test-server.exe` 一律不动（也不会阻止我们启动自己的）。
 - **底部的「命令行调试」勾选框**：勾上后「开始 / 预览」用 `CREATE_NEW_CONSOLE` 启动 wp8f ——
   它有自己的命令行窗口（输出打在窗口里、不写 `logs/wp8f.log`）。其余行为与普通启动一致：
@@ -193,7 +196,7 @@ gui/                    # 控制台（单进程 wp8f-gui.exe）
 | `GET /api/config/list`、`GET /api/config/{name}`、`POST /api/config/save` | 配置读写（保存前校验 JSON） |
 | `GET /api/fm/aircraft`、`GET /api/fm/{name}`、`GET /api/fm/{name}/curves` | 机型列表 / 详情 / 曲线（调用 **`binary/flightmodel.exe`**，透传 `fuel_pct`/`extra_weight`）。`/curves` 走 `--curves-json`：CL 极曲线、推力/功率-速度族、以及 **`em` 段（只喷气机有）** —— 控制台的 EM 能量机动图按 `flightmodel/scripts/plot_flight_model.py` 的 `plot_em` 画法绘制（Ps 色带 + 瞬时/持续包线 + 峰值标注 + 等过载线 + VNE 线，一档高度一张，用下拉切换）。数据根用 **`wp8f_flightmodel::resolve_data_root_in(仓库根)`** 解析（与 HUD 同一份实现）：`<仓库根>/resource/data` 优先，不存在时用更新器 A/B 分区的暂存根 `<仓库根>/resource/data_new`；以**绝对路径**显式传给 `--data-dir`（不依赖子进程 cwd 与 CLI 默认值）；目录不存在时返回 500 并在消息里指路 |
 | `GET /api/fm/version` | FM 数据库版本（读数据根里的 `version`，纯文本一行，如 `2.58.0.35`；A/B 分区时是 `resource/data_new/version`）。`{ok, version, source}`；页签标题旁显示同一份值，缺文件时 `ok=false`（不编造版本号） |
-| `POST /api/wp8f/launch`、`POST /api/wp8f/drag-preview` | 启动 wp8f（**已有一个自己的 wp8f 在跑则失败**，500 + 原因；body 里 `console:true` = 给它一个自己的控制台窗口）/ 拖拽预览（test-server + `--drag`，同样要求 test-server 未在跑） |
+| `POST /api/wp8f/launch`、`POST /api/wp8f/drag-preview` | 启动 wp8f（**已有一个自己的 wp8f 在跑则失败**，500 + 原因；body 里 `console:true` = 给它一个自己的控制台窗口；**非预览启动会先结束自己启动的 test-server**，免得 HUD 连到模拟数据上）/ 拖拽预览（test-server + `--drag`，同样要求 test-server 未在跑） |
 | `GET /api/replay/list`、`GET /api/replay/load?file=` | 飞行记录列表 / 解析回放数据（**只认 `.wpr`**；旧 `.acmi`/`.csv` 的读路径已删除，加载它们返回 400）。`map.has_image = false`（记录没带底图）→ 回放**不铺底面地图**（只留网格线）：JSON 里没有"借来的底图"这种字段，服务端也不扫 logs/ 找替代品 |
 | `GET /api/replay/map?file=` | `.wpr` 内嵌的地图底图原始字节（Content-Type 取记录里的 `img_mime`）。**只解容器头 + meta**，不解析 CSV。记录没带底图（`img_len = 0`）→ 404（不伪造、不外借） |
 | `POST /api/replay/upload?name=` | 上传本地飞行记录（**只接受 `.wpr`**，≤16MB，重名自动加序号，不覆盖；其它扩展名 400） |
@@ -241,7 +244,8 @@ all_wp8f_pids() -> Vec<u32>, start_reaper(self: Arc<Self>), status_json(webview_
 * 前置：`binary/{wp8f,test-server}.exe` 已构建（缺件时报错并提示先构建）；
   **本控制台还没有自己启动的 wp8f**（预览还要 test-server 也没在跑）。
 * 后置：起一个 wp8f（预览时另起/复用一个可用的 test-server）；新进程挂进作业对象、
-  记下 pid 供"只回收自己启动的"使用。
+  记下 pid 供"只回收自己启动的"使用。**非预览启动前先结束自己启动的 test-server**
+  （`preview_server_to_stop`：它占着 8111，留着 HUD 会读到模拟数据）。
 * 错误：`Err(String)` —— 缺件 / 已有自己的实例在跑 / 启动失败 / 端口被占；
   **别人的 wp8f 一律不动**。
 * 副作用：起进程、写 `logs/wp8f.log` / `logs/test-server.log`、改内部 pid 记录。
