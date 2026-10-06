@@ -1039,6 +1039,8 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     // 超速比 = MAX(表速/VNE, 马赫/MNE)，VNE/MNE 随后掠取值（与面板显示同源），
     // 限值缺失（≤0）时该向不参与；经 speed_margin 线性映射（95%→起音阈值、
     // 100%→长鸣阈值，连续线不硬切）后并入取最大。
+    // 最后过一道**表速门限**（`gate_by_ias`）：≤ 64 km/h 一律压到 0 —— 地面滑跑/落地滑行
+    // 时低速大攻角、过载比也容易顶阈值，不出声；状态机照常推进，长鸣能正常释放。
     let r_ias = if display_data.vne > 0.0 {
         display_data.ias / display_data.vne
     } else {
@@ -1049,14 +1051,17 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     } else {
         0.0
     };
-    display_data.maneuver_margin = crate::maneuver_tone::maneuver_margin(
-        display_data.aoa,
-        display_data.max_aoa,
-        display_data.min_aoa,
-        display_data.ny,
-        pos_lim,
-        neg_lim,
-        r_ias.max(r_mach),
+    display_data.maneuver_margin = crate::maneuver_tone::gate_by_ias(
+        crate::maneuver_tone::maneuver_margin(
+            display_data.aoa,
+            display_data.max_aoa,
+            display_data.min_aoa,
+            display_data.ny,
+            pos_lim,
+            neg_lim,
+            r_ias.max(r_mach),
+        ),
+        display_data.ias,
     );
     if pos_lim > 0.0 {
         // 与表速格 "/1477"（VNE）的单位栏风格一致

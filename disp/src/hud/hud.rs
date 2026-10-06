@@ -370,6 +370,7 @@ mod tests {
 
     /// **D24 回退的回归护栏**：中文表的值必须**逐条等于**改缩写之前的中文标签
     ///（原文见 `git show 0eb3053a^:disp/src/hud/hud.rs`）。改标签 = 改这里，逼着人确认。
+    /// 唯一例外：`hud.f.sep` 按用户要求用**全角** `ＳＥＰ`（与"表　速""高　度"等三字标签同宽）。
     #[test]
     fn chinese_labels_are_the_original_strings() {
         let got: Vec<(&str, &str)> = labels_in("zh");
@@ -379,7 +380,7 @@ mod tests {
             ("hud.f.mach", "马赫数"),
             ("hud.f.alt", "高　度"),
             ("hud.f.vy", "爬升率"),
-            ("hud.f.sep", "SEP"),
+            ("hud.f.sep", "ＳＥＰ"),
             ("hud.f.turn", "转弯率"),
             ("hud.f.orbit", "盘旋率"),
             ("hud.f.roll", "滚转率"),

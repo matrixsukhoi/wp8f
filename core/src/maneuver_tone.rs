@@ -11,6 +11,9 @@
 //!
 //! 与语音告警**并存**：机动告警声是独立座舱音效层，不进语音冷却/闪烁 X 体系。
 //! 时间由调用方注入（`Instant`），便于单元测试。
+//!
+//! **表速门限**：表速 ≤ [`MIN_IAS_KMH`]（64 km/h）时参数压到 0 —— 地面滑跑、落地滑行时
+//! 攻角/过载比容易虚假触阈，低速一律不出声；状态机照常推进，长鸣会正常释放。
 
 use std::time::{Duration, Instant};
 
@@ -30,6 +33,9 @@ pub const BEEP_HZ_MAX: f64 = 12.0;
 pub const SPEED_START_RATIO: f64 = 0.95;
 /// 超速项斜率 = (长鸣阈值 − 起音阈值) / (1.0 − 起点) = 0.30/0.05 = 6
 pub const SPEED_SLOPE: f64 = (SOLID_RATIO - START_RATIO) / (1.0 - SPEED_START_RATIO);
+/// 机动告警声的最低表速（km/h）：**表速 ≤ 本值一律不出声**。
+/// 地面滑跑/落地滑行时低速大攻角、过载比也容易顶到阈值，卡一道速度门限免得一直响。
+pub const MIN_IAS_KMH: f64 = 64.0;
 
 /// 超速项映射（**连续线，不硬切**）：`m = 起音阈值 + (r − 0.95) × 6`。
 /// - r = 0.95 → 起音阈值（70%）；r = 1.00 → 长鸣阈值（100%）；r > 1 越限 → >1 长鸣
@@ -81,6 +87,18 @@ pub fn maneuver_margin(
         }
     };
     aoa_r.max(g_r).max(speed_margin(speed_ratio))
+}
+
+/// 表速门限：`ias_kmh > MIN_IAS_KMH` 时原样返回，否则压到 0（静默）。
+///
+/// 只压**参数**、不跳过状态机推进 —— 收到 0 会走正常的停音/释放长鸣分支
+/// （见 [`ManeuverTone::update`]），所以空中拉出长鸣后落地滑行不会把长鸣卡住。
+pub fn gate_by_ias(margin: f64, ias_kmh: f64) -> f64 {
+    if ias_kmh > MIN_IAS_KMH {
+        margin
+    } else {
+        0.0
+    }
 }
 
 /// 蜂鸣间隔：m 从 70% → 100% 时频率 2Hz → 12Hz 线性加密
@@ -193,6 +211,21 @@ mod tests {
         // 越限超速 → 长鸣段（>1）
         let m = maneuver_margin(1.0, 10.0, -8.0, 1.0, 10.0, -8.0, 1.02);
         assert!(m > 1.0, "{m}");
+    }
+
+    /// 表速门限：地面滑跑/落地滑行不出声（≤ 64 km/h 压到 0），空中原样透传。
+    #[test]
+    fn ias_gate_mutes_at_or_below_64_kmh() {
+        assert_eq!(gate_by_ias(0.8, 0.0), 0.0, "停机/滑行");
+        assert_eq!(gate_by_ias(1.2, 64.0), 0.0, "正好 64：不出声（严格大于才触发）");
+        assert!((gate_by_ias(0.8, 64.1) - 0.8).abs() < 1e-9, "刚过门限：原样");
+        assert!((gate_by_ias(1.5, 300.0) - 1.5).abs() < 1e-9, "长鸣段也原样透传");
+        // 状态机收 0 会正常复位：空中长鸣 → 落地滑行 = 停音指令，不会卡住
+        let t0 = Instant::now();
+        let mut tone = ManeuverTone::new();
+        assert!(tone.update(gate_by_ias(1.0, 400.0), t0).solid_start);
+        let o = tone.update(gate_by_ias(1.0, 30.0), t0 + Duration::from_millis(50));
+        assert!(o.solid_stop, "滑行时应当释放长鸣：{o:?}");
     }
 
     #[test]

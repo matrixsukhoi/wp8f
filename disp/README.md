@@ -132,6 +132,8 @@ HUD 的**显示层**，也是 core 与 HUD/logger 之间的**共享状态中转�
   会画出空白屏 —— 这两个键**已删除**（配置里若还有，被当成未知键忽略）。
 * 声音两个独立开关（都默认开）：`voice_warnings_enabled`（语音包播报）与
   `maneuver_tone_enabled`（F-18 风格机动告警声）；关掉只影响声音，视觉告警照旧。
+  机动告警声另有**表速门限**：表速 ≤ 64 km/h（`core::maneuver_tone::MIN_IAS_KMH`）不出声，
+  免得地面滑跑时低速大攻角误触发。
 * 派生量（都带钳位）：`refresh_hz_clamped() -> u32`（`REFRESH_HZ_MIN = 5` ..
   `REFRESH_HZ_MAX = 60`，缺省 30）、`refresh_interval_ns()`、
   `map_obj_record_every_frames_clamped()`（`1..=refresh_hz`，缺省 `MAP_OBJ_INTERVAL_FRAME = 8`）。

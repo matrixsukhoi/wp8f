@@ -1042,7 +1042,8 @@ pub struct DisplayData {
     pub max_aoa: f64,
     /// 负向临界攻角（度，负值）：alpha_crit_low，襟翼/后掠插值口径同 max_aoa
     pub min_aoa: f64,
-    /// 机动告警参数 m = MAX(攻角比, 过载比)（含负向）：≥0.75 蜂鸣起音，≥1.0 长鸣
+    /// 机动告警参数 m = MAX(攻角比, 过载比, 超速项)（含负向）：≥70% 蜂鸣起音，≥100% 长鸣。
+    /// **表速 ≤ 64 km/h 时 core 把它压到 0**（地面滑跑不出声，见 `core::maneuver_tone::gate_by_ias`）。
     pub maneuver_margin: f64,
     pub aircraft_type: FixedBytes<64>,
     pub altitude_text: FixedBytes<16>,
