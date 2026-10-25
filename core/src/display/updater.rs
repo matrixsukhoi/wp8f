@@ -191,7 +191,8 @@ pub fn update_display_from_state(
 
     // Phase 2: 格式化（读 → 算 → 格式化 三段里的第三段，全部在这一步做完）
     format_display_text(display_data, ctx, tick);
-    format_hud_text(display_data);
+    // 渲染层文本由显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
+    wp8f_disp::hud_text::fill(display_data);
 }
 
 /// 过载告警阈值：|Ny| 达到允许过载的该比例即告警（语音 + 红色，各 panel 统一）
@@ -977,86 +978,8 @@ fn format_map_text(map: &mut MapDisplay, map_info: &crate::parser::MapInfo, near
         &mut map.map_zone_text,
         crate::math::map::calc_map_zone(player_x, player_y, map_info).as_str(),
     );
-    format_poi_text(map);
-}
-
-/// POI 的两个渲染层文本：圆环与 miniHUD 的**箭头规则不同**（mini 在贴近正前时用 `<`/`>`），
-/// 版式（宽度、取整、前导空格）也各一份 —— 都在这里算，渲染器只取值。
-fn format_poi_text(map: &mut MapDisplay) {
-    if map.nearest_poi_dist >= f64::MAX {
-        // 没有 POI：清空，免得渲染器将来改条件时读到上一帧的旧文本。
-        set_text_str(&mut map.poi_text, "");
-        set_text_str(&mut map.mini_poi_text, "");
-        set_text_str(&mut map.poi_speed_text, "");
-        set_text_str(&mut map.mini_poi_speed_text, "");
-        return;
-    }
-    let dist = (map.nearest_poi_dist / 1000.0).round();
-    let bearing = map.nearest_poi_bearing;
-    let rel_bearing_adj = bearing - 180.0;
-
-    // 圆环 HUD：正前 `-`、左 `←`、右 `→`
-    let circle_prefix = if rel_bearing_adj.abs() > 177.5 {
-        "-"
-    } else if rel_bearing_adj > 0.0 {
-        "←"
-    } else {
-        "→"
-    };
-    set_text(&mut map.poi_text, format_args!("{:<2}{:>3.0}", circle_prefix, dist));
-    set_text(&mut map.poi_speed_text, format_args!("{:+.0}", map.nearest_poi_rel_speed));
-
-    // miniHUD：多了"几乎正左/正右"两档（`<` / `>`）
-    let mini_prefix = if rel_bearing_adj.abs() > 177.5 {
-        "-"
-    } else if rel_bearing_adj > 0.0 {
-        if bearing > 355.0 { "<" } else { "←" }
-    } else if bearing < 5.0 {
-        ">"
-    } else {
-        "→"
-    };
-    set_text(&mut map.mini_poi_text, format_args!("{:<2}{:>3.0}", mini_prefix, dist));
-    set_text(&mut map.mini_poi_speed_text, format_args!(" {:+.0}", map.nearest_poi_rel_speed));
-}
-
-/// **渲染层文本的批量格式化**：两个 HUD 每帧要印的每个数字都在这里一次算完。
-///
-/// 规矩：渲染层（`disp` 的 `circle_hud` / `mini_hud`）只许 `as_str()` 落屏，不许出现
-/// `format_args!` / `format!`。这里刻意写成**一串互不依赖的写入**（同一操作、不同数据），
-/// 编译器能把它们当成独立的访存 + 格式化流水起来；也**不按 `hud_type` 分支**——两套文本都算、
-/// 渲染器各取所需（HUD 类型一个进程内不变，分支留在最容易预测的地方反而更慢）。
-fn format_hud_text(d: &mut DisplayData) {
-    // 先把标量取出来：都是 `Copy`，既省得反复借 `d`，也把"这一段只读这几个量"写在明面上。
-    let altitude = d.altitude;
-    let radio_altitude = d.radio_altitude;
-    let ias = d.ias as i32;
-    let mach = d.mach;
-    let aoa = d.aoa;
-    let energy_height = d.energy_height;
-    let sep = d.sep as i32;
-    let ny = d.ny;
-    let heading = d.heading;
-    let throttle = d.engine_throttle[0].clamp(0.0, 110.0);
-
-    // —— 圆环 HUD ——
-    set_text(&mut d.hud_text.circle_alt, format_args!("H {:>5.0}", altitude));
-    set_text(&mut d.hud_text.circle_radio_alt, format_args!("R {:>5.0}", radio_altitude));
-    set_text(&mut d.hud_text.circle_ias, format_args!("{:>4}", ias));
-    set_text(&mut d.hud_text.circle_mach, format_args!("{:>5.2}", mach));
-    set_text(&mut d.hud_text.circle_aoa, format_args!("α {:.1}", aoa));
-    set_text(&mut d.hud_text.circle_energy, format_args!("E{:>9.0}", energy_height));
-    set_text(&mut d.hud_text.circle_sep, format_args!("SEP{:>+5.0}", sep));
-    set_text(&mut d.hud_text.circle_g, format_args!("G{:>+7.1}", ny));
-    set_text(&mut d.hud_text.circle_fuel, format_args!("L {}", d.fuel_time_text.as_str()));
-    set_text(&mut d.hud_text.circle_heading, format_args!("{:>3.0}°", heading));
-
-    // —— miniHUD（同样的量，版式不同）——
-    set_text(&mut d.hud_text.mini_mach, format_args!("M{:.2}", mach));
-    set_text(&mut d.hud_text.mini_aoa, format_args!("α{:>3}", aoa as i32));
-    set_text(&mut d.hud_text.mini_radio_alt, format_args!("{:.0}R", radio_altitude));
-    set_text(&mut d.hud_text.mini_g, format_args!("{:.1}", ny));
-    set_text(&mut d.hud_text.throttle, format_args!("{:.0}", throttle));
+    // 渲染层文本归显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
+    wp8f_disp::hud_text::fill_map(map);
 }
 
 fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick: &Tick) {
