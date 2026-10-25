@@ -7,14 +7,15 @@ use std::time::Instant;
 /// SEP 危险阈值（m/s）：SEP 低于该值变红（miniHUD / circle HUD 共用）。
 pub const SEP_ALERT_THRESHOLD: f64 = -300.0;
 
-/// SEP 告警级别：`0` 正常，`1` ≤ 0（黄），`2` < `SEP_ALERT_THRESHOLD`（红）。
-pub fn sep_warning_level(sep: f64) -> u8 {
+/// SEP 告警等级：`Normal` 正常，`Caution` ≤ 0（黄），`Alert` < `SEP_ALERT_THRESHOLD`（红）。
+pub fn sep_warning_level(sep: f64) -> crate::WarningStage {
+    use crate::WarningStage::{Alert, Caution, Normal};
     if sep < SEP_ALERT_THRESHOLD {
-        2
+        Alert
     } else if sep <= 0.0 {
-        1
+        Caution
     } else {
-        0
+        Normal
     }
 }
 
@@ -60,21 +61,21 @@ pub fn warning_blink_visible() -> bool {
     phase_ms < period_ms * 0.5
 }
 
-/// Map a warning level to its color: `0` = normal, `1` = yellow (hint),
-/// `2` = red (alert).
-pub fn warning_level_color(level: u8, normal: u32) -> u32 {
+/// 告警等级 → 颜色：`Normal` 原色，`Caution` 黄（hint），`Alert` 红（alert）。
+pub fn warning_level_color(level: crate::WarningStage, normal: u32) -> u32 {
+    use crate::WarningStage::{Alert, Caution, Normal};
     match level {
-        2 => crate::HUD_COLORS.alert_u32(),
-        1 => crate::HUD_COLORS.hint_u32(),
-        _ => normal,
+        Alert => crate::HUD_COLORS.alert_u32(),
+        Caution => crate::HUD_COLORS.hint_u32(),
+        Normal => normal,
     }
 }
 
 
-/// 过载颜色：`g_load_warning` 非 0（|Ny| ≥ 90% 允许过载）→ 红色告警，否则正常。
+/// 过载颜色：`g_load_warning` 在告警（黄/红都算）→ 红色告警，否则正常。
 /// 各 panel 的过载着色统一走这里（判据见 core 的 `g_load_warning_level`）。
-pub fn g_warning_color(level: u8, normal: u32) -> u32 {
-    if level > 0 {
+pub fn g_warning_color(level: crate::WarningStage, normal: u32) -> u32 {
+    if level.is_active() {
         crate::HUD_COLORS.alert_u32()
     } else {
         normal
@@ -83,14 +84,15 @@ pub fn g_warning_color(level: u8, normal: u32) -> u32 {
 
 
 /// Combined IAS warning level: two-stage overspeed (yellow at 95% VNE, red at
-/// 97.5%) raised by the speed-brake caution (yellow at most). `0` while data
+/// 99%) raised by the speed-brake caution (at most yellow). `Normal` while data
 /// is invalid. Single source for every IAS color decision.
-pub fn ias_warning_level(data: &DisplayData) -> u8 {
+pub fn ias_warning_level(data: &DisplayData) -> crate::WarningStage {
+    use crate::WarningStage::{Caution, Normal};
     if data.valid != 1 {
-        return 0;
+        return Normal;
     }
-    let brake_level = if data.brake_caution { 1 } else { 0 };
-    data.overspeed_warning.max(brake_level)
+    let brake = if data.brake_caution { Caution } else { Normal };
+    data.overspeed_warning.worst(brake)
 }
 
 /// IAS display color for `ias_warning_level`.
@@ -496,12 +498,13 @@ mod tests {
 
     #[test]
     fn sep_warning_level_two_tier() {
-        assert_eq!(sep_warning_level(100.0), 0);
-        assert_eq!(sep_warning_level(0.0), 1, "≤ 0 黄");
-        assert_eq!(sep_warning_level(-299.0), 1);
-        assert_eq!(sep_warning_level(-300.0), 1, "恰好 -300 仍为黄（红是严格小于）");
-        assert_eq!(sep_warning_level(-301.0), 2, "< -300 红");
-        assert_eq!(sep_warning_level(-500.0), 2);
+        use crate::WarningStage::{Alert, Caution, Normal};
+        assert_eq!(sep_warning_level(100.0), Normal);
+        assert_eq!(sep_warning_level(0.0), Caution, "≤ 0 黄");
+        assert_eq!(sep_warning_level(-299.0), Caution);
+        assert_eq!(sep_warning_level(-300.0), Caution, "恰好 -300 仍为黄（红是严格小于）");
+        assert_eq!(sep_warning_level(-301.0), Alert, "< -300 红");
+        assert_eq!(sep_warning_level(-500.0), Alert);
     }
 
     #[test]

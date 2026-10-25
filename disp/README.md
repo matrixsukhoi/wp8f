@@ -196,9 +196,9 @@ missing_error() -> Option<String>, resident_bytes() -> usize}`
 ### HUD 公共判定（`hud_common`，两种样式共用）
 | 接口 | 语义 |
 |---|---|
-| `sep_warning_level(sep: f64) -> u8` | 特定能量告警分级（供配色） |
-| `ias_warning_level(&DisplayData) -> u8` / `ias_warning_color(&DisplayData, normal) -> u32` | 表速告警分级/配色 |
-| `warning_level_color(level, normal)` / `g_warning_color(level, normal)` | 通用告警色 / 过载告警色 |
+| `sep_warning_level(sep: f64) -> WarningStage` | 特定能量告警分级（供配色） |
+| `ias_warning_level(&DisplayData) -> WarningStage` / `ias_warning_color(&DisplayData, normal) -> u32` | 表速告警分级/配色 |
+| `warning_level_color(WarningStage, normal)` / `g_warning_color(WarningStage, normal)` | 通用告警色 / 过载告警色 |
 | `warning_blink_visible() -> bool` | 告警闪烁相位（按配置的 `warning_blink_hz`） |
 | `map_zone_of(&MapDisplay, x, y) -> String` / `map_zone_label(...)` | 归一化坐标 → 区域格（如 D3） |
 | `status_items(&DisplayData, &HudColors) -> Vec<(String, u32)>` | 状态行条目（文案 + 颜色） |

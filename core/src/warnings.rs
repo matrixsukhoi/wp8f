@@ -512,7 +512,7 @@ impl VoiceWarning {
     /// 过载语音告警：|Ny| 达到允许过载的 90% 时告警（与 HUD 红色告警同一判据
     /// `display::updater::g_load_warning_level`，按当前重量换算允许过载）
     pub fn check_g_load(&mut self, ny: f64, neg_limit: f64, pos_limit: f64) {
-        if crate::display::updater::g_load_warning_level(ny, neg_limit, pos_limit) > 0 {
+        if crate::display::updater::g_load_warning_level(ny, neg_limit, pos_limit).is_active() {
             self.trigger_danger("g_load", "warn_loadfactor");
         }
     }

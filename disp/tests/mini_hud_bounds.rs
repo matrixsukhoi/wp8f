@@ -23,7 +23,7 @@ fn sample() -> DisplayData {
     d.tas_text.assign(b"1300");
     d.mach_text.assign(b"1.20");
     d.mach = 1.2;
-    d.mach_warning = 1;
+    d.mach_warning = wp8f_disp::WarningStage::Caution;
     d.altitude_text.assign(b"8500");
     d.altitude = 8500.0;
     d.radio_altitude = 420.0;
@@ -33,7 +33,7 @@ fn sample() -> DisplayData {
     d.sep_text.assign(b"145");
     d.sep = 145.0;
     d.ny = 7.5;
-    d.g_load_warning = 1;
+    d.g_load_warning = wp8f_disp::WarningStage::Caution;
     d.has_attitude = true;
     d.turn_rate_text.assign(b"18.5");
     d.elapsed_time_text.assign(b"12:34");

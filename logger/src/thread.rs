@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use wp8f_disp::{get_map_data, DisplayData, FrameReader};
+use wp8f_disp::{get_map_data, DisplayData, FrameReader, WarningStage};
 use crate::wpr::{self, CsvPool, MapMeta, Record, RecordGroup, RecordMeta, RecordRow};
 
 /// 统计行周期（秒）：到点就打印一行累计统计（只在这段时间确实写过东西时打）。
@@ -460,6 +460,26 @@ fn map_ready(d: &DisplayData, start_frame: u64) -> bool {
     d.frame > start_frame
 }
 
+/// 记录行的**同构列**约定：`RecordRow::v` 是 `[f64; 43]`（`.wpr` 的 CSV 契约，列义见
+/// `wpr::CSV_HEADER`），所以布尔列与枚举列到这一层必须编码成数字。
+///
+/// 两个小函数就是这层编码的**唯一出口** —— 调用点写 `flag(x)` / `stage_col(x)` 比
+/// `if x { 1.0 } else { 0.0 }`、`x.as_u8() as f64` 更能说明"这里在按格式编码"，也杜绝
+/// `as` 链（枚举 → u8 → f64 两跳）散落在 43 个列里。
+fn flag(b: bool) -> f64 {
+    if b {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// 告警等级列：CSV 里存 `WarningStage` 的数值口径（0/1/2，见 `WarningStage::as_u8`），
+/// 列类型统一是 f64。
+fn stage_col(s: WarningStage) -> f64 {
+    f64::from(s.as_u8())
+}
+
 /// 一帧 `DisplayData` → 一行记录：**逐字段原样拷贝**，不换算、不改符号、不认识任何外部格式。
 fn row_of(d: &DisplayData, fallback_ns: u64) -> RecordRow {
     // `DisplayData.timestamp` 是纳秒（core 更新器每帧写入，与主循环节拍同基准）；
@@ -487,11 +507,11 @@ fn row_of(d: &DisplayData, fallback_ns: u64) -> RecordRow {
         d.total_drag,
         d.manifold_pressure,
         d.fuel_kg, d.fuel_percent, d.fuel1_kg,
-        d.overspeed_warning as f64,
-        d.mach_warning as f64,
-        d.g_load_warning as f64,
-        if d.voice_alarm { 1.0 } else { 0.0 },
-        if d.brake_caution { 1.0 } else { 0.0 },
+        stage_col(d.overspeed_warning),
+        stage_col(d.mach_warning),
+        stage_col(d.g_load_warning),
+        flag(d.voice_alarm),
+        flag(d.brake_caution),
     ];
     RecordRow {
         time_ns: t,

@@ -88,7 +88,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
 
         // Mach number: colored by its own MNE stage, shown near/over the Mach
         // limit or once it enters a warning stage.
-        if data.mach >= 0.95 || data.mach_warning > 0 {
+        if data.mach >= 0.95 || data.mach_warning.is_active() {
             let mach_text = format!("M{:.2}", data.mach);
             let mach_color = crate::hud_common::warning_level_color(data.mach_warning, colors.data_u32());
             draw_mini_text(

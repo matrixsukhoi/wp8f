@@ -171,8 +171,11 @@ HUD 的**唯一数据生产端**：从本地 8111 端口拉取游戏状态 → �
 | 接口 | 语义 |
 |---|---|
 | `update_display_from_state(...)` | 每帧总入口：飞行 → 发动机 → 燃油 → 性能指标 → 告警分级 |
-| `warning_stage(value: f64, limit: f64) -> u8` | 通用分级（0 = 正常，值越大越严重） |
-| `g_load_warning_level(ny, neg_limit, pos_limit) -> u8` | 过载分级（正负向各按自身限值） |
+| `warning_stage(value: f64, limit: f64) -> WarningStage` | 通用两级分级（`Normal` / ≥95% `Caution` / ≥99% `Alert`） |
+| `g_load_warning_level(ny, neg_limit, pos_limit) -> WarningStage` | 过载分级（正负向各按自身限值；`Caution` = 红） |
+
+* 告警等级是 `wp8f_disp::WarningStage`（`Normal`/`Caution`/`Alert`，`#[repr(u8)]`）：
+  **多来源取最严重 = `.worst()`（`Ord::max`）**，写进 `.wpr` CSV 的数字仍是 `0/1/2`。
 
 * 前置：`ctx` 已 `load_flight_model()`（否则 FM 相关字段按无效处理）。
 * 后置：文本字段一律经 `set_text*` 写入定长 `FixedBytes`（**不分配**，超长截断）；

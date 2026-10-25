@@ -20,6 +20,7 @@ use crate::DisplayData;
 use wp8f_disp::FixedBytes;
 use wp8f_disp::MapDisplay;
 use wp8f_disp::MapObjectDisplay;
+use wp8f_disp::WarningStage;
 use wp8f_flightmodel::EngineLoad;
 
 fn set_text<const N: usize>(field: &mut FixedBytes<N>, args: std::fmt::Arguments<'_>) {
@@ -148,13 +149,14 @@ pub fn update_display_from_state(
 pub const G_WARN_RATIO: f64 = 0.9;
 
 /// 过载告警级别（**各 panel/语音的唯一判据**）：
-/// `|Ny|` 达到允许过载（按方向取正/负限值）的 `G_WARN_RATIO`（90%）→ 1，否则 0。
-pub fn g_load_warning_level(ny: f64, neg_limit: f64, pos_limit: f64) -> u8 {
+/// `|Ny|` 达到允许过载（按方向取正/负限值）的 `G_WARN_RATIO`（90%）→ `Caution`（红色告警），
+/// 否则 `Normal`。
+pub fn g_load_warning_level(ny: f64, neg_limit: f64, pos_limit: f64) -> WarningStage {
     let lim = if ny >= 0.0 { pos_limit } else { neg_limit.abs() };
     if lim > 0.0 && ny.abs() >= lim * G_WARN_RATIO {
-        1
+        WarningStage::Caution
     } else {
-        0
+        WarningStage::Normal
     }
 }
 
@@ -166,17 +168,18 @@ pub const WARNING_STAGE1_RATIO: f64 = 0.95;
 pub const WARNING_STAGE2_RATIO: f64 = 0.99;
 
 /// Two-stage overspeed warning level for a value against its limit:
-/// `0` normal, `1` >= 95% of limit (yellow), `2` >= 97.5% of limit (red).
-pub fn warning_stage(value: f64, limit: f64) -> u8 {
+/// `Normal` / `Caution` (>= 95% of limit, yellow) / `Alert` (>= 99% of limit, red).
+/// 限值缺失（`<= 0`）或数值非有限 → `Normal`（不告警）。
+pub fn warning_stage(value: f64, limit: f64) -> WarningStage {
     if limit <= 0.0 || !value.is_finite() {
-        return 0;
+        return WarningStage::Normal;
     }
     if value >= limit * WARNING_STAGE2_RATIO {
-        2
+        WarningStage::Alert
     } else if value >= limit * WARNING_STAGE1_RATIO {
-        1
+        WarningStage::Caution
     } else {
-        0
+        WarningStage::Normal
     }
 }
 
@@ -1120,42 +1123,59 @@ mod tests {
 
     #[test]
     fn warning_stage_two_stage_thresholds() {
+        use WarningStage::{Alert, Caution, Normal};
         let vne = 1000.0;
-        assert_eq!(warning_stage(900.0, vne), 0, "below the 95% line stays normal");
-        assert_eq!(warning_stage(949.9, vne), 0, "just below 95% stays normal");
-        assert_eq!(warning_stage(950.0, vne), 1, "95% line turns yellow (stage 1)");
-        assert_eq!(warning_stage(989.9, vne), 1, "below 99% stays yellow");
-        assert_eq!(warning_stage(990.0, vne), 2, "99% line turns red (stage 2)");
-        assert_eq!(warning_stage(1200.0, vne), 2, "far above the limit stays red");
+        assert_eq!(warning_stage(900.0, vne), Normal, "below the 95% line stays normal");
+        assert_eq!(warning_stage(949.9, vne), Normal, "just below 95% stays normal");
+        assert_eq!(warning_stage(950.0, vne), Caution, "95% line turns yellow (stage 1)");
+        assert_eq!(warning_stage(989.9, vne), Caution, "below 99% stays yellow");
+        assert_eq!(warning_stage(990.0, vne), Alert, "99% line turns red (stage 2)");
+        assert_eq!(warning_stage(1200.0, vne), Alert, "far above the limit stays red");
     }
 
     #[test]
     fn warning_stage_handles_missing_limit() {
-        assert_eq!(warning_stage(500.0, 0.0), 0);
-        assert_eq!(warning_stage(500.0, -1.0), 0);
-        assert_eq!(warning_stage(f64::NAN, 1000.0), 0);
+        use WarningStage::Normal;
+        assert_eq!(warning_stage(500.0, 0.0), Normal);
+        assert_eq!(warning_stage(500.0, -1.0), Normal);
+        assert_eq!(warning_stage(f64::NAN, 1000.0), Normal);
     }
 
     #[test]
     fn warning_stage_mach_uses_mne() {
+        use WarningStage::{Alert, Caution, Normal};
         let mne = 2.0;
-        assert_eq!(warning_stage(1.89, mne), 0);
-        assert_eq!(warning_stage(1.9, mne), 1);
-        assert_eq!(warning_stage(1.97, mne), 1);
-        assert_eq!(warning_stage(1.98, mne), 2);
+        assert_eq!(warning_stage(1.89, mne), Normal);
+        assert_eq!(warning_stage(1.9, mne), Caution);
+        assert_eq!(warning_stage(1.97, mne), Caution);
+        assert_eq!(warning_stage(1.98, mne), Alert);
+    }
+
+    /// 等级可以**组合**：多来源取最严重的那个 = `.worst()`（`Ord::max` 的 const 版）。
+    #[test]
+    fn warning_stage_composes_by_worst() {
+        use WarningStage::{Alert, Caution, Normal};
+        assert_eq!(Normal.worst(Caution), Caution);
+        assert_eq!(Alert.worst(Caution), Alert, "红压黄");
+        assert_eq!(Normal.worst(Normal), Normal);
+        // 数值口径（写进 `.wpr` CSV 的那一列）：0 / 1 / 2
+        assert_eq!([Normal.as_u8(), Caution.as_u8(), Alert.as_u8()], [0, 1, 2]);
+        assert_eq!(WarningStage::from_u8(9), Alert, "越界值当红，不至于丢告警");
+        assert!(!Normal.is_active() && Caution.is_active() && Alert.is_active());
     }
 
     #[test]
     fn g_load_warning_level_at_90_percent() {
+        use WarningStage::{Caution, Normal};
         // 正向：90%×14 = 12.6 起告警
-        assert_eq!(g_load_warning_level(12.5, -8.0, 14.0), 0);
-        assert_eq!(g_load_warning_level(12.6, -8.0, 14.0), 1);
-        assert_eq!(g_load_warning_level(13.5, -8.0, 14.0), 1);
+        assert_eq!(g_load_warning_level(12.5, -8.0, 14.0), Normal);
+        assert_eq!(g_load_warning_level(12.6, -8.0, 14.0), Caution);
+        assert_eq!(g_load_warning_level(13.5, -8.0, 14.0), Caution);
         // 负向：按负限值 |−8|×0.9 = 7.2 起告警
-        assert_eq!(g_load_warning_level(-7.0, -8.0, 14.0), 0);
-        assert_eq!(g_load_warning_level(-7.2, -8.0, 14.0), 1);
+        assert_eq!(g_load_warning_level(-7.0, -8.0, 14.0), Normal);
+        assert_eq!(g_load_warning_level(-7.2, -8.0, 14.0), Caution);
         // 无限制数据不告警
-        assert_eq!(g_load_warning_level(20.0, 0.0, 0.0), 0);
+        assert_eq!(g_load_warning_level(20.0, 0.0, 0.0), Normal);
     }
 
     #[test]

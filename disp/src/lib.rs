@@ -974,6 +974,67 @@ pub fn set_window_visible(visible: bool) {
     tracing::debug!("[DISP] set_window_visible({})", visible);
 }
 
+/// 告警等级（**POD 的 1 字节**，与 `.wpr` CSV 列里的数字一一对应）。
+///
+/// 三个来源（超速 / 马赫 / 过载 / SEP …）各自算出等级后，**"取最严重"就是 `Ord::max`**：
+/// 不再靠 `u8` 的 0/1/2 隐式约定去 `.max(1)`。
+///
+/// 数值口径（CSV 与旧数据的契约，别改顺序）：`0` 正常 / `1` 黄 / `2` 红。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(u8)]
+#[serde(from = "u8", into = "u8")]
+pub enum WarningStage {
+    /// 正常（无告警）
+    #[default]
+    Normal = 0,
+    /// 黄：接近临界（超速 95%、过载 ≥90% 允许值、SEP ≤ 0 …）
+    Caution = 1,
+    /// 红：越界（超速 99%、SEP < 阈值 …）
+    Alert = 2,
+}
+
+impl WarningStage {
+    /// 写进 POD/CSV 的数值（`.wpr` 里存的就是它）。
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// 数值 → 等级：`>= 2` 一律当红（旧录制/越界值不至于让整块面板不显示告警）。
+    pub const fn from_u8(v: u8) -> Self {
+        match v {
+            0 => Self::Normal,
+            1 => Self::Caution,
+            _ => Self::Alert,
+        }
+    }
+
+    /// 两个来源里更严重的那个（`Ord::max` 的 `const` 版本，便于常量/纯函数里组链）。
+    pub const fn worst(self, other: Self) -> Self {
+        if (self as u8) >= (other as u8) {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// 是否在告警（黄或红）。替代散落的 `> 0` 判断。
+    pub const fn is_active(self) -> bool {
+        (self as u8) > 0
+    }
+}
+
+impl From<u8> for WarningStage {
+    fn from(v: u8) -> Self {
+        Self::from_u8(v)
+    }
+}
+
+impl From<WarningStage> for u8 {
+    fn from(s: WarningStage) -> u8 {
+        s.as_u8()
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DisplayData {
     pub magic: u32,
@@ -1034,11 +1095,11 @@ pub struct DisplayData {
     /// 起落架边沿判定结果：false = 下降沿（正在收回）→ 起落架超速告警抑制
     pub gear_armed: bool,
     /// Two-stage overspeed warning level for IAS vs VNE:
-    /// 0 = normal, 1 = >= 95% VNE (yellow), 2 = >= 97.5% VNE (red).
-    pub overspeed_warning: u8,
+    /// `Normal` / `Caution` (>= 95% VNE, yellow) / `Alert` (>= 99% VNE, red).
+    pub overspeed_warning: WarningStage,
     /// Two-stage overspeed warning level for Mach vs MNE (same scale as
     /// `overspeed_warning`).
-    pub mach_warning: u8,
+    pub mach_warning: WarningStage,
     /// Danger-class voice alarm active (overspeed family / critical AoA /
     /// G-load): miniHUD / circle HUD flash a warning X while true. System
     /// cautions (overheat, RPM, fuel, ...) do not set this flag.
@@ -1097,9 +1158,9 @@ pub struct DisplayData {
     pub g_load_text: FixedBytes<16>,
     /// 当前重量下的允许正过载，显示在过载格单位栏（如 "/15.4"，风格同 VNE）
     pub g_limit_text: FixedBytes<16>,
-    /// 过载告警级别：0 = 正常，1 = |Ny| 达到允许过载的 90%（红色告警）。
+    /// 过载告警等级：`Normal` = 正常，`Caution` = |Ny| 达到允许过载的 90%（红色告警）。
     /// 判据单一来源 core::display::updater::g_load_warning_level，各 panel 统一消费。
-    pub g_load_warning: u8,
+    pub g_load_warning: WarningStage,
     pub fuel_sfc: f64,
     pub fuel1_sfc: f64,
     pub manifold_pressure: f64,

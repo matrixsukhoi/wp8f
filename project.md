@@ -203,7 +203,7 @@ bash scripts/test.sh --gui               # 只打印 Windows 侧探针的跑法�
 | 发动机 | `engine_count`(≤ `MAX_ENGINES = 8`) + 六个 `[f64; 8]` 数组（油门/功率/转速/推力/水温/油温）+ `is_jet` |
 | 性能 | `engine_efficiency` `thrust_to_weight` `power_to_weight` `total_thrust` `total_hp` `thrust_percent` `energy_height` `turn_rate` `turn_radius` |
 | 限制 | `vne` `vne_mach` `max_aoa` `min_aoa` `maneuver_margin` `gear_armed` |
-| 告警 | `overspeed_warning`(0/1/2) `mach_warning`(0/1/2) `g_load_warning`(0/1) `voice_alarm` `brake_caution` |
+| 告警 | `overspeed_warning` / `mach_warning` / `g_load_warning` 都是 **`WarningStage`**（`Normal`=0 / `Caution`=1 / `Alert`=2，写进 CSV 仍是 0/1/2）+ `voice_alarm` `brake_caution` |
 | 文本 | `*_text` 与 `aircraft_type` 都是 **`FixedBytes<N>`**（定长、无堆 —— 环要求 POD） |
 
 * 字符串一律 `FixedBytes`（`as_str()` / `assign()` / `clear()`），新增字段时**不要**用 `String`。
