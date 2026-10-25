@@ -103,26 +103,16 @@ pub fn draw_link_panel(
         draw_text_raw(buffer, buf_width, buf_height, font, x + COL_TYPE * font_size, ry, t.type_str(), font_size, colors.data_u32());
         // 数值列：栈上缓冲格式化（每行 5 个数字，以前每格一次 `format!` 分配）
         let mut num = crate::FixedBytes::<8>::new();
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_IAS * font_size, ry, fmt_into(&mut num, format_args!("{:.0}", t.ias)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_ALT * font_size, ry, fmt_into(&mut num, format_args!("{:.0}", t.altitude)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_HDG * font_size, ry, fmt_into(&mut num, format_args!("{:.0}", t.heading)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_DIST * font_size, ry, fmt_into(&mut num, format_args!("{:.1}", dist_km)), font_size, colors.poi_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_IAS * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.ias)), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_ALT * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.altitude)), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_HDG * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.heading)), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_DIST * font_size, ry, num.write_fmt_str(format_args!("{:.1}", dist_km)), font_size, colors.poi_u32());
 
         // 区域：由归一化坐标 + 本地地图网格推导（如 D3）——`MapZone` 是栈上定长，零分配
         let zone = crate::hud_common::map_zone_of(map, t.x, t.y);
         draw_text_raw(buffer, buf_width, buf_height, font, x + COL_ZONE * font_size, ry, zone.as_str(), font_size, colors.poi_u32());
         row += 1;
     }
-}
-
-/// 数值写进**栈上定长缓冲**并借出 `&str`（返回的引用在下次调用前有效）。
-fn fmt_into<'a, const N: usize>(
-    buf: &'a mut crate::FixedBytes<N>,
-    args: std::fmt::Arguments<'_>,
-) -> &'a str {
-    buf.clear();
-    let _ = std::fmt::Write::write_fmt(buf, args);
-    buf.as_str()
 }
 
 #[cfg(test)]

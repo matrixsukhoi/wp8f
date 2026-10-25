@@ -3,9 +3,11 @@ use crate::MapDisplay;
 
 const SMALL_FONT_RATIO: f32 = 0.707;
 
+/// 取 `DisplayData` 里的定长文本字段：`as_str()` 是只读借用、零分配，
+/// 也不再走 `Cow`（这些字段都是我们自己的 `set_text` 写的，必是合法 UTF-8）。
 macro_rules! text {
     ($data:expr, $field:ident) => {
-        String::from_utf8_lossy($data.$field.as_bytes())
+        $data.$field.as_str()
     };
 }
 
@@ -89,7 +91,8 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         // Mach number: colored by its own MNE stage, shown near/over the Mach
         // limit or once it enters a warning stage.
         if data.mach >= 0.95 || data.mach_warning.is_active() {
-            let mach_text = format!("M{:.2}", data.mach);
+            let mut b = crate::FixedBytes::<8>::new();
+            let mach_text = b.write_fmt_str(format_args!("M{:.2}", data.mach));
             let mach_color = crate::hud_common::warning_level_color(data.mach_warning, colors.data_u32());
             draw_mini_text(
                 buffer,
@@ -98,7 +101,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 font,
                 info_x + 4.0 * font_size,
                 start_y,
-                &mach_text,
+                mach_text,
                 mach_color,
                 font_size,
             );
@@ -130,7 +133,8 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             colors.unit_u32(),
         );
         let aoa_val = data.aoa as i32;
-        let aoa_text = format!("α{:>3}", aoa_val);
+        let mut aoa_buf = crate::FixedBytes::<8>::new();
+        let aoa_text = aoa_buf.write_fmt_str(format_args!("α{:>3}", aoa_val));
         draw_mini_text(
             buffer,
             width,
@@ -138,7 +142,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             font,
             info_x + 4.0 * font_size,
             aoa_bar_y - font_size * 0.07,
-            &aoa_text,
+            aoa_text,
             aoa_color,
             font_size * SMALL_FONT_RATIO,
         );
@@ -152,6 +156,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 colors.data_u32()
             };
         if data.radio_altitude > 0.0 && data.radio_altitude <= 500.0 {
+            let mut radio_buf = crate::FixedBytes::<8>::new();
             draw_mini_info_line_right_align(
                 buffer,
                 width,
@@ -160,7 +165,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 alt_y,
                 " ",
-                &format!("{:.0}R", data.radio_altitude),
+                radio_buf.write_fmt_str(format_args!("{:.0}R", data.radio_altitude)),
                 alt_color,
                 font_size,
             );
@@ -229,6 +234,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         if data.ny.abs() > 1.5 {
             // 过载统一告警逻辑：≥90% 允许过载时红色
             let g_color = crate::hud_common::g_warning_color(data.g_load_warning, colors.data_u32());
+            let mut g_buf = crate::FixedBytes::<8>::new();
             draw_mini_info_line_right_align(
                 buffer,
                 width,
@@ -237,7 +243,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 line4_y,
                 "G",
-                &format!("{:.1}", data.ny),
+                g_buf.write_fmt_str(format_args!("{:.1}", data.ny)),
                 g_color,
                 font_size,
             );
@@ -269,10 +275,12 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             } else {
                 if poi_bearing < 5.0 { (">", colors.poi_u32()) } else { ("→", colors.poi_u32()) }
             };
-            let poi_text = format!("{:<2}{:>3.0}", prefix, poi_dist.round());
-            let poi_text_w = measure_text_raw(font, &poi_text, font_size);
-            let speed_text = format!(" {:+.0}", map.nearest_poi_rel_speed);
-            let speed_text_w = measure_text_raw(font, &speed_text, font_size * 0.75);
+            let mut poi_buf = crate::FixedBytes::<16>::new();
+            let poi_text = poi_buf.write_fmt_str(format_args!("{:<2}{:>3.0}", prefix, poi_dist.round()));
+            let poi_text_w = measure_text_raw(font, poi_text, font_size);
+            let mut speed_buf = crate::FixedBytes::<8>::new();
+            let speed_text = speed_buf.write_fmt_str(format_args!(" {:+.0}", map.nearest_poi_rel_speed));
+            let speed_text_w = measure_text_raw(font, speed_text, font_size * 0.75);
             // 这一段是往右长出去的：**夹在面板框内**（信息列右边界 = 锚点 + 面板宽），
             // 免得又画到擦除框外边去（框外的像素擦不掉，会在拖动后留残影）。
             let poi_x = (info_x + 4.0 * font_size)
@@ -285,7 +293,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 font,
                 poi_x,
                 line4_y,
-                &poi_text,
+                poi_text,
                 color,
                 font_size,
             );
@@ -296,7 +304,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 font,
                 poi_x + poi_text_w,
                 line4_y + font_size * 0.125,
-                &speed_text,
+                speed_text,
                 colors.poi_u32(),
                 font_size * 0.75,
             );
@@ -359,7 +367,8 @@ fn draw_throttle_vertical(
     throttle_color: u32,
     border_color: u32,
 ) {
-    let throttle_text = format!("{:.0}", throttle);
+    let mut throttle_buf = crate::FixedBytes::<8>::new();
+    let throttle_text = throttle_buf.write_fmt_str(format_args!("{:.0}", throttle));
 
     let fill_ratio = (throttle / 110.0).clamp(0.0, 1.0) as f32;
 
@@ -429,7 +438,7 @@ fn draw_throttle_vertical(
         font,
         (num_x - char_w * 3) as f32,
         num_y as f32,
-        &throttle_text,
+        throttle_text,
         font_size * SMALL_FONT_RATIO,
         throttle_color,
     );

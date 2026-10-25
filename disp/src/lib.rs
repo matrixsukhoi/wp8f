@@ -67,6 +67,16 @@ impl<const N: usize> FixedBytes<N> {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
+
+    /// 清空后写入格式化文本，并借出 `&str` —— **画 HUD 的热路径零分配**。
+    ///
+    /// 以前各处是 `&format!("…")`：每帧每个数值语法/分配/释放一次 `String`，只为拷几个字节。
+    /// 现在：`buf.write_fmt_str(format_args!("H {:>5.0}", alt))`（返回的引用在下次调用前有效）。
+    pub fn write_fmt_str(&mut self, args: std::fmt::Arguments<'_>) -> &str {
+        self.clear();
+        let _ = std::fmt::Write::write_fmt(self, args);
+        self.as_str()
+    }
 }
 
 impl<const N: usize> Default for FixedBytes<N> {
