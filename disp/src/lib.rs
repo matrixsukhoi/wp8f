@@ -211,6 +211,45 @@ fn default_voice_path() -> String {
     "resource/voice/zh_xiaoxuan_calm_youngadultfemale_1_04".to_string()
 }
 
+// -------------------------------------------------------- 配置派生量区间 --
+/// 配置派生量的**合法区间**：区间和默认值写在一起，调用点不再抄上下限字面量。
+///
+/// 只用于**配置派生量**（刷新率 / 地图记录间隔 / 环槽数 …）；几何与像素的钳制属于布局语义，
+/// 不在这里。
+#[derive(Debug, Clone, Copy)]
+pub struct Clamp<T> {
+    pub lo: T,
+    pub hi: T,
+}
+
+impl<T: PartialOrd + Copy> Clamp<T> {
+    pub const fn new(lo: T, hi: T) -> Self {
+        Self { lo, hi }
+    }
+
+    /// 收进区间。`lo > hi`（配置写反）时按 `lo` 处理 —— 不 panic。
+    pub fn apply(self, v: T) -> T {
+        if v < self.lo {
+            self.lo
+        } else if v > self.hi {
+            self.hi
+        } else {
+            v
+        }
+    }
+
+    pub fn contains(self, v: T) -> bool {
+        v >= self.lo && v <= self.hi
+    }
+}
+
+/// 数据刷新频率区间（Hz）。上限同时是「地图记录间隔最多 1 秒的数据帧数」与
+/// 「记录采样率最高 = 一个主循环节拍」的上限。
+pub const REFRESH_HZ_RANGE: Clamp<u32> = Clamp::new(REFRESH_HZ_MIN, REFRESH_HZ_MAX);
+/// 环形缓冲槽数区间（`2..=256`）：1 槽时"下一个待写槽"就是正在读的那个。
+pub const RING_SLOTS_RANGE: Clamp<u32> =
+    Clamp::new(wp8f_ring::Ring::<()>::MIN_SLOTS as u32, RING_SLOTS_MAX);
+
 /// 飞行记录配置（布局配置 JSON 的 `record` 段）。
 ///
 /// 记录写成 wp8f 自有的 `.wpr`（地图信息 + 底图 + N 组逐帧 CSV）；归一化地图坐标原样入档，
@@ -221,16 +260,14 @@ fn default_voice_path() -> String {
 /// `core/src/mapobj.rs::period_ms`）。地图坐标每 `map_obj_record_every_frames` 个数据帧才更新
 /// 一次，记录得比它更快只会写下坐标完全相同的重复帧 —— 所以这条口径不开放配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RecordConfig {
     /// 启用飞行记录
-    #[serde(default)]
     pub enabled: bool,
     /// 输出目录（空 = ./logs）
-    #[serde(default)]
     pub output_dir: String,
     /// 每组 CSV 内存池的**初始**容量（MiB，默认 8）：记录期间只往内存里追加行、写满自动扩容。
     /// 按默认采样周期（8 数据帧 @30 Hz = 266 ms）估算：1 MiB ≈ 1500 行 ≈ 6.5 分钟。
-    #[serde(default = "default_record_pool_mb")]
     pub pool_mb: u32,
 }
 
@@ -252,12 +289,11 @@ impl Default for RecordConfig {
 /// （`frames / refresh_hz` 秒），**地图环**按地图采样算（`map_samples × map_obj_record_every_frames / refresh_hz` 秒）。
 /// 卡顿/断点调试时可以调大；调大只多占内存（槽在启动时一次分配）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RingConfig {
     /// `DisplayData` 帧环槽数（默认 32 ≈ 30 Hz 下 1 秒）
-    #[serde(default = "default_ring_frames")]
     pub frames: u32,
     /// `MapDisplay` 地图环槽数（默认 32 ≈ 4 Hz 采样下 8 秒）
-    #[serde(default = "default_ring_map_samples")]
     pub map_samples: u32,
 }
 
@@ -276,38 +312,32 @@ impl Default for RingConfig {
 impl RingConfig {
     /// 钳到 `2..=256`（1 个槽时"下一个待写槽"就是正在读的那个）。
     pub fn frames_clamped(&self) -> usize {
-        (self.frames.clamp(wp8f_ring::Ring::<()>::MIN_SLOTS as u32, RING_SLOTS_MAX)) as usize
+        RING_SLOTS_RANGE.apply(self.frames) as usize
     }
 
     pub fn map_samples_clamped(&self) -> usize {
-        (self.map_samples.clamp(wp8f_ring::Ring::<()>::MIN_SLOTS as u32, RING_SLOTS_MAX)) as usize
+        RING_SLOTS_RANGE.apply(self.map_samples) as usize
     }
 }
 
 /// Link-8 数据链客户端配置（并入布局配置 JSON 的 `datalink` 段）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DataLinkConfig {
     /// 是否启用 Link-8 上报/接收
-    #[serde(default)]
     pub enabled: bool,
     /// 服务端 IP/主机名
-    #[serde(default = "default_datalink_server")]
     pub server: String,
     /// 服务端端口
-    #[serde(default = "default_datalink_port")]
     pub port: u16,
     /// 加密密钥（须与服务端一致）
-    #[serde(default)]
     pub key: String,
     /// 对局编号（同对局才互相共享）
-    #[serde(default = "default_datalink_session")]
     pub session_id: u8,
     /// 上报频率（Hz，整数）
-    #[serde(default = "default_datalink_send_hz")]
     pub send_hz: u32,
     /// 友军快照超时（秒）：这么久没收到服务端应答就清空友军（地图标记 + 数据标签面板）；
     /// `0` = 一直保留最后一份快照。与服务端自己的追踪超时同口径。
-    #[serde(default = "default_datalink_peer_timeout_secs")]
     pub peer_timeout_secs: u32,
 }
 
@@ -328,11 +358,8 @@ impl Default for DataLinkConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HudLayoutConfig {
-    #[serde(default = "default_hud_type")]
     pub hud_type: HudType,
-    #[serde(default)]
     pub circle_x: i32,
-    #[serde(default)]
     pub circle_y: i32,
     pub font_size: f32,
     pub flight_info_x: i32,
@@ -351,27 +378,20 @@ pub struct HudLayoutConfig {
     //    注意：**HUD 本体（圆环 / miniHUD）不在这里**，它只由 `hud_type` 决定
     //    （0 关 / 1 mini / 2 圆环）—— 两套开关并存过，结果就是"改了类型没改开关"
     //    画出空白屏（老键 `minihud_enabled`/`circle_enabled` 现在被忽略）。
-    #[serde(default = "default_true")]
     pub flight_info_enabled: bool,
-    #[serde(default = "default_true")]
     pub engine_info_enabled: bool,
-    #[serde(default = "default_true")]
     pub map_enabled: bool,
-    #[serde(default = "default_true")]
     pub datalink_panel_enabled: bool,
     /// 语音/提示音开关（默认开）。关掉后不出任何声音，但视觉告警（告警 X）照旧。
-    #[serde(default = "default_true")]
     pub voice_warnings_enabled: bool,
     /// F-18 风格**机动告警声**开关（默认开）：与语音告警是两个独立音层，
     /// 关掉只停蜂鸣/长鸣，`voice_warnings_enabled` 与视觉告警都不受影响。
-    #[serde(default = "default_true")]
     pub maneuver_tone_enabled: bool,
     /// **core 数据刷新频率（Hz）**：主循环读 8111 + 更新 `DisplayData` 的节拍，也决定面板重绘
     /// 频率。缺省 30，钳到 [`REFRESH_HZ_MIN`]..=[`REFRESH_HZ_MAX`]。
     ///
     /// ⚠️ 帧计数类常量（地图记录间隔、语音告警检查 8 帧、告警保持 30 帧）按**帧**算，
     /// 改本值它们的**时间口径一起变**；记录线程的采样周期（= 地图刷新周期）也跟着变。
-    #[serde(default = "default_refresh_hz")]
     pub refresh_hz: u32,
     /// **地图记录间隔（数据帧）**：本机地图位置、友军快照、地图对象列表每多少数据帧记一次
     /// （core 闸门 `frame_count >= next_mapobj_frame`，初值 = 本值 → 首次记录在第 N 个数据帧）。
@@ -380,63 +400,50 @@ pub struct HudLayoutConfig {
     /// * 取值 `1..=refresh_hz`（缺省 [`MAP_OBJ_INTERVAL_FRAME`]），夹紧见
     ///   [`Self::map_obj_record_every_frames_clamped`]；
     /// * 记录线程的起点也用本值（首个周期 `pos_x/pos_y` 还是初值 `(0.5, 0.5)`，记下来会闪）。
-    #[serde(default = "default_map_obj_record_every_frames")]
     pub map_obj_record_every_frames: u64,
-    #[serde(default = "default_map_font")]
     pub map_font_size: f32,
-    #[serde(default = "default_map_icon")]
     pub map_icon_size: f32,
-    #[serde(default = "default_map_obj_font")]
     pub map_obj_font_size: f32,
-    #[serde(default = "default_circle_font")]
     pub circle_font_size: f32,
-    #[serde(default = "default_circle_radius")]
     pub circle_ring_radius: f32,
-    #[serde(default = "default_mini_font")]
     pub mini_font_size: f32,
-    #[serde(default = "default_grid_spacing")]
     pub grid_spacing: f32,
-    #[serde(default = "default_grid_padding")]
     pub grid_padding: f32,
     // —— 颜色（7 个键）：配置里一律 **`#RRGGBBAA`**，换算在 `hex_color` 模块里成内部 `0xAARRGGBB`。
     //    值**直通落屏、不预乘**（半透明合成交给窗口）；其中 data/label/unit/hint/alert 是
     //    **文字色**，值是补偿值 —— 改动前先看 `draw/glyph_cache.rs`。
-    #[serde(default = "default_map_bg_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub map_bg_color: u32,
-    #[serde(default = "default_data_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub data_color: u32,
-    #[serde(default = "default_label_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub label_color: u32,
-    #[serde(default = "default_unit_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub unit_color: u32,
-    #[serde(default = "default_hint_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub hint_color: u32,
-    #[serde(default = "default_alert_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub alert_color: u32,
-    #[serde(default = "default_stroke_color", with = "hex_color")]
+    #[serde(with = "hex_color")]
     pub stroke_color: u32,
     /// Warning X blink frequency in Hz (on/off cycles per second, 50% duty
     /// cycle; `<= 0` disables blinking and keeps the X visible).
-    #[serde(default = "default_warning_blink_hz")]
     pub warning_blink_hz: f32,
     /// Link-8 数据链客户端配置
-    #[serde(default, alias = "link8")]
+    #[serde(alias = "link8")]
     pub datalink: DataLinkConfig,
     /// 飞行记录配置（`.wpr`）
-    #[serde(default)]
     pub record: RecordConfig,
     /// 环形缓冲区槽数（帧环 / 地图环）
-    #[serde(default)]
     pub ring: RingConfig,
     /// 友军数据标签 Panel 位置（旧配置键 `link8_x`/`link8_y` 仍兼容）
-    #[serde(default = "default_datalink_x", alias = "link8_x")]
+    #[serde(alias = "link8_x")]
     pub datalink_x: i32,
-    #[serde(default = "default_datalink_y", alias = "link8_y")]
+    #[serde(alias = "link8_y")]
     pub datalink_y: i32,
     /// **界面语言**：`resource/i18n/<code>.json` 的 code（`zh_simp`/`zh_trad`/`en`/…，旧写法也认），
     /// `auto` = 跟随系统。消费方是 GUI/后端；**HUD 不看这个键**（看 `hud_lang_path`）。
     /// HUD 会把它原样读入、原样存回，别在保存时弄丢。
-    #[serde(default = "default_language")]
     pub language: String,
     /// **HUD 标签语言文件**：相对安装根的路径，例如 `resource/lang/zh.json`（绝对路径也接受）。
     /// 自建 `resource/lang/xxx.json`（键集与随包两份一致）指过来就能换一套标签。
@@ -444,21 +451,18 @@ pub struct HudLayoutConfig {
     /// * 空 = 随包的中文表 `resource/lang/zh.json`（不看 [`Self::language`]）；
     /// * 由 **core 初始化时读**（`core/src/main.rs`）：只留 `hud.*` 标签，JSON 与中间对象立刻释放；
     /// * 文件不存在 / 解析失败 → HUD 报错退出（`exit 2`），不静默回退。
-    #[serde(default)]
     pub hud_lang_path: String,
     /// **语音包目录**：相对安装根的目录，例如 `resource/voice/<包名>`（绝对路径也接受）。
     /// 目录里放 `*.wav`（文件主干 = 代码里点播的名字，如 `warn_gear`）；**放一个新子目录就是一个新包**。
     ///
     /// * 启动时整目录读进内存（`core/src/warnings.rs::preload`），之后播放零磁盘 I/O；
     /// * 单个 wav 缺失/损坏 → 去重警告后跳过；目录找不到 → 警告后静音运行（语音是增强功能）。
-    #[serde(default = "default_voice_path")]
     pub voice_path: String,
     /// **HUD 正文字体**：指向真实字体文件的路径，值自带 `resource/fonts/` 这一段（绝对路径也接受）。
     ///
     /// * **必填**：空、文件不存在或解析不了 → HUD 报错退出（`exit 2`），不会挑别的字体顶上；
     /// * 解析基准 = 仓库/安装根（cwd → 上一级 → exe 目录 → exe 目录上一级）；
     /// * 取值来源 = `GET /api/fonts`（GUI 的「字体」卡片）；细节见 `disp/src/font.rs`。
-    #[serde(default = "default_font_path")]
     pub font_path: String,
 }
 
@@ -471,7 +475,9 @@ fn default_font_path() -> String {
 impl Default for HudLayoutConfig {
     fn default() -> Self {
         Self {
-            hud_type: HudType::Mini,
+            // 每个键的默认值**只写在这一个函数里**（serde 缺键也走它：容器级 `#[serde(default)]`），
+            // 所以一律调 `default_*()`，不要再抄字面量 —— 抄一份就多一个真值来源。
+            hud_type: default_hud_type(),
             font_size: DEFAULT_FONT_SIZE,
             flight_info_x: 0,
             flight_info_y: 1235,
@@ -487,14 +493,14 @@ impl Default for HudLayoutConfig {
             map_size_y: 0,
             circle_x: 0,
             circle_y: 0,
-            map_font_size: 16.0,
-            map_icon_size: 18.0,
-            map_obj_font_size: 12.0,
-            circle_font_size: 24.0,
-            circle_ring_radius: 300.0,
-            mini_font_size: 30.0,
-            grid_spacing: 7.0,
-            grid_padding: 10.0,
+            map_font_size: default_map_font(),
+            map_icon_size: default_map_icon(),
+            map_obj_font_size: default_map_obj_font(),
+            circle_font_size: default_circle_font(),
+            circle_ring_radius: default_circle_radius(),
+            mini_font_size: default_mini_font(),
+            grid_spacing: default_grid_spacing(),
+            grid_padding: default_grid_padding(),
             // 颜色一律走 default_*_color()：**单一来源**。这里原来自己抄了一份字面量，
             // 迁移文字色时"改了函数、漏了这份副本"就得到两套默认色（缺键配置与无配置文件不一致）。
             map_bg_color: default_map_bg_color(),
@@ -504,22 +510,20 @@ impl Default for HudLayoutConfig {
             hint_color: default_hint_color(),
             alert_color: default_alert_color(),
             stroke_color: default_stroke_color(),
-            warning_blink_hz: 4.0,
+            warning_blink_hz: default_warning_blink_hz(),
             datalink: DataLinkConfig::default(),
-            flight_info_enabled: true,
-            engine_info_enabled: true,
-            map_enabled: true,
-            datalink_panel_enabled: true,
-            voice_warnings_enabled: true,
-            maneuver_tone_enabled: true,
+            flight_info_enabled: default_true(),
+            engine_info_enabled: default_true(),
+            map_enabled: default_true(),
+            datalink_panel_enabled: default_true(),
+            voice_warnings_enabled: default_true(),
+            maneuver_tone_enabled: default_true(),
             refresh_hz: default_refresh_hz(),
-            // 与 serde default 同源：**只调函数，不抄字面量**（缺键配置与无配置文件必须一致）
             map_obj_record_every_frames: default_map_obj_record_every_frames(),
             record: RecordConfig::default(),
             ring: RingConfig::default(),
             datalink_x: default_datalink_x(),
             datalink_y: default_datalink_y(),
-            // 与 serde default 同源（缺键配置 == 无配置文件）
             language: default_language(),
             // 空 = 按 `language` 映射（老配置口径）；**默认值必须留空**：
             // 写成 `resource/lang/zh.json` 会让"老配置的 language=en"失效（serde 补默认值
@@ -874,11 +878,11 @@ pub fn hud_layout() -> &'static HudLayoutConfig {
 impl HudLayoutConfig {
     /// 钳制后的 core 数据刷新频率（Hz）。
     pub fn refresh_hz_clamped(&self) -> u32 {
-        self.refresh_hz.clamp(REFRESH_HZ_MIN, REFRESH_HZ_MAX)
+        REFRESH_HZ_RANGE.apply(self.refresh_hz)
     }
 
     /// 主循环节拍（纳秒）—— core 侧"读 8111 / 更新 DisplayData"周期的**唯一来源**
-    /// （`refresh_hz` 越界时按 [`REFRESH_HZ_MIN`]/[`REFRESH_HZ_MAX`] 钳制）。
+    /// （`refresh_hz` 越界时按 [`REFRESH_HZ_RANGE`] 钳制）。
     pub fn refresh_interval_ns(&self) -> u64 {
         1_000_000_000 / self.refresh_hz_clamped() as u64
     }
@@ -886,9 +890,11 @@ impl HudLayoutConfig {
     /// 钳制后的**地图记录间隔（数据帧）**：`1..=refresh_hz_clamped()`（0 会让闸门每帧触发，
     /// 超过 1 秒的间隔已经不是"记录"而是"快照"）。调用方一律用这个值，不要直接读字段。
     pub fn map_obj_record_every_frames_clamped(&self) -> u64 {
-        let max = self.refresh_hz_clamped() as u64;
-        self.map_obj_record_every_frames
-            .clamp(MAP_OBJ_RECORD_EVERY_FRAMES_MIN, max)
+        Clamp::new(
+            MAP_OBJ_RECORD_EVERY_FRAMES_MIN,
+            self.refresh_hz_clamped() as u64,
+        )
+        .apply(self.map_obj_record_every_frames)
     }
 }
 
@@ -1776,6 +1782,62 @@ pub fn get_map_data() -> Option<&'static MapDisplay> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **缺键 == 内置默认**：这是"容器级 `#[serde(default)]`"该给出的唯一保证，
+    /// 也是删掉字段级 `#[serde(default = "…")]`（冗余）的安全网。
+    /// 谁把某字段的 `Default` 改成与 serde 原本的默认不同，这里立刻红。
+    #[test]
+    fn empty_json_equals_builtin_default_for_every_config_section() {
+        fn same<T>(name: &str)
+        where
+            T: serde::Serialize + serde::de::DeserializeOwned + Default,
+        {
+            let empty: T = serde_json::from_str("{}").unwrap();
+            assert_eq!(
+                serde_json::to_value(&empty).unwrap(),
+                serde_json::to_value(T::default()).unwrap(),
+                "{name}: 缺键读出来的值必须与 Default::default() 完全一致",
+            );
+        }
+        same::<HudLayoutConfig>("HudLayoutConfig");
+        same::<RecordConfig>("record");
+        same::<RingConfig>("ring");
+        same::<DataLinkConfig>("datalink");
+
+        // 嵌套段也一样（整份 `{}` 里的 record/ring/datalink 必须就是各自的 Default）
+        let whole: HudLayoutConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(
+            serde_json::to_value(&whole.record).unwrap(),
+            serde_json::to_value(RecordConfig::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&whole.ring).unwrap(),
+            serde_json::to_value(RingConfig::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&whole.datalink).unwrap(),
+            serde_json::to_value(DataLinkConfig::default()).unwrap()
+        );
+    }
+
+    /// 配置派生量的区间：默认值必须落在区间内，且区间端点就是"生效上下限"。
+    #[test]
+    fn config_ranges_contain_their_defaults() {
+        let c = HudLayoutConfig::default();
+        assert!(REFRESH_HZ_RANGE.contains(c.refresh_hz), "默认刷新率必须在区间内");
+        assert!(REFRESH_HZ_RANGE.contains(c.refresh_hz_clamped()));
+        assert_eq!(RING_SLOTS_RANGE.lo, 2, "1 槽时下一个待写槽就是正在读的那个");
+        assert_eq!(RING_SLOTS_RANGE.hi, 256);
+        let r = RingConfig::default();
+        assert!(RING_SLOTS_RANGE.contains(r.frames));
+        assert!(RING_SLOTS_RANGE.contains(r.map_samples));
+        // 地图记录间隔的区间是"动态上界 = refresh_hz"，两端都要在区间里
+        let clamp = Clamp::new(MAP_OBJ_RECORD_EVERY_FRAMES_MIN, c.refresh_hz_clamped() as u64);
+        assert!(
+            clamp.contains(c.map_obj_record_every_frames_clamped()),
+            "生效的地图记录间隔必须落在 {clamp:?} 里"
+        );
+    }
 
     /// 记录间隔常量 = 配置缺键时的默认值（8 数据帧 ≈ 30 Hz 下 4 Hz）；
     /// 运行时真正生效的是 `map_obj_record_every_frames`（core 的闸门与记录起点都用它）。
