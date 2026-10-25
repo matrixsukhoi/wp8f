@@ -23,8 +23,8 @@ HUD 的**唯一数据生产端**：从本地 8111 端口拉取游戏状态 → �
   空白固定、字段名带空格与逗号），比通用 JSON 快得多，**用户口径：不可改动**。
 * **状态计算集中在 `display/updater.rs`**。每帧把解析结果与 `FlightContext`（跨帧状态：
   重量/油耗基线、发动机工作计时、过热、气压/滑油等）合成 `DisplayData`：定长文本
-  走 `FixedBytes` + `set_text*`，数值走 `fmt::{format_sig_figs, format_adaptive}`。
-  油量以**连接开始时的 fuel0 为基线**守卫（避免游戏未读到油量时算出负数）；
+  走 `FixedBytes` + `set_text*` / `text_or!`，数值走 `fmt::{write_sig_figs, write_adaptive}`
+  （**直接写进定长缓冲，零分配**）。油量以**连接开始时的 fuel0 为基线**守卫（避免游戏未读到油量时算出负数）；
   单位按 `imperial` 开关分叉（表速/高度/马压/温度）。
 * **告警两条独立音层**。`warnings.rs` 管**语音告警**（`VoicePack` 启动时把
   `resource/voice/**/*.wav` 预加载进内存，`rodio` 播放；带冷却与「闪烁 X」显示），
@@ -204,9 +204,10 @@ HUD 的**唯一数据生产端**：从本地 8111 端口拉取游戏状态 → �
 * 时间由调用方注入（`Instant`），因此可单元测试；不进语音冷却/X 体系。错误：无。副作用：播放蜂鸣音。
 
 ### 小工具
-* `fmt::format_sig_figs(value, sigfigs) -> String`：有效数字格式化（HUD 数值列）。
-* `fmt::format_adaptive(v, base_decimals) -> String`：自适应小数位（用于 SFC 等跨量级值）。
-* `fmt::format_duration(total_secs) -> String`：秒 → `hh:mm:ss`。
+* `fmt::value::{write_sig_figs, write_adaptive}(out: &mut impl fmt::Write, …)`：有效数字 / 自适应小数位，
+  **直接写进 `out`**（`FixedBytes` 就是 `fmt::Write`，热路径零分配）；`format_adaptive(…) -> String`
+  只留给启动报告这类冷路径。
+* `fmt::time::write_duration(out, total_secs)`：`mm'ss` 时长，同样零分配。
 * `math::angle::{normalize_angle_deg, angle_difference_deg, compass_deg, target_bearing_deg,
   round_sep, parse_hex_color}`；`math::map::{normalize_to_map_coords, calc_distance_to_player,
   calc_weighted_distance, calc_map_zone, extract_*_coords}`；`math::average::SimpleMovingAverage`。

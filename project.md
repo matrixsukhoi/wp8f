@@ -206,9 +206,10 @@ bash scripts/test.sh --gui               # 只打印 Windows 侧探针的跑法�
 | 告警 | `overspeed_warning` / `mach_warning` / `g_load_warning` 都是 **`WarningStage`**（`Normal`=0 / `Caution`=1 / `Alert`=2，写进 CSV 仍是 0/1/2）+ `voice_alarm` `brake_caution` |
 | 文本 | `*_text` 与 `aircraft_type` 都是 **`FixedBytes<N>`**（定长、无堆 —— 环要求 POD） |
 
-* 字符串一律 `FixedBytes`（`as_str()` / `assign()` / `clear()`），新增字段时**不要**用 `String`。
-* 数值文本在 `core/src/display/updater.rs` 里格式化（`format_sig_figs` / `format_adaptive`）；
-  HUD 只画不格式化。
+* 字符串一律 `FixedBytes`（`as_str()` / `assign()` / `clear()` / `write_fmt_str()`），新增字段时**不要**用 `String`。
+* 数值文本在 `core/src/display/updater.rs` 里格式化（`text_or!` + `fmt::{write_sig_figs, write_adaptive}`，
+  **直接写进定长缓冲，零分配**）；HUD 只画不格式化，绘制端的数值文本同样写栈缓冲
+  （`FixedBytes::write_fmt_str`），**渲染器里不许出现 `format!`/`to_string()`**（P2 已清零 22 处）。
 * `frame` 是记录起点的判据（`frame > RecordConfig::start_frame`）。
 
 ### 环形缓冲与地图采样（配置键）

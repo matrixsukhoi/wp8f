@@ -200,10 +200,14 @@ missing_error() -> Option<String>, resident_bytes() -> usize}`
 | `ias_warning_level(&DisplayData) -> WarningStage` / `ias_warning_color(&DisplayData, normal) -> u32` | 表速告警分级/配色 |
 | `warning_level_color(WarningStage, normal)` / `g_warning_color(WarningStage, normal)` | 通用告警色 / 过载告警色 |
 | `warning_blink_visible() -> bool` | 告警闪烁相位（按配置的 `warning_blink_hz`） |
-| `map_zone_of(&MapDisplay, x, y) -> String` / `map_zone_label(...)` | 归一化坐标 → 区域格（如 D3） |
-| `status_items(&DisplayData, &HudColors) -> Vec<(String, u32)>` | 状态行条目（文案 + 颜色） |
+| `map_zone_of(&MapDisplay, x, y) -> MapZone` / `map_zone_label(...) -> MapZone` | 归一化坐标 → 区域格（如 `D3`）；`MapZone` 是**栈上定长**（`[u8; 3]`），`as_str()` 零分配 |
+| `status_items(&DisplayData, &HudColors) -> StatusItems` | 状态行条目（文案 + 颜色）；`StatusItems` 是**定长栈数组**（≤4 项，`FixedBytes<8>` 文本），零分配 |
 | `legacy_glyph_color(u32) -> u32` / `blend_pixel_cov(...)` | 旧观感补偿 / 覆盖率混合 |
-| `draw_arc_band_aa(...)` / `draw_warning_x(...)` / `draw_voice_alarm_x(...)` / `draw_inline_items(...)` | 共用画法（AA 弧带、警示叉、语音告警叉、行内条目） |
+| `draw_arc_band_aa(...)` / `draw_warning_x(...)` / `draw_voice_alarm_x(...)` / `draw_inline_items(..., &StatusItems, ...)` | 共用画法（AA 弧带、警示叉、语音告警叉、行内条目） |
+
+> **热路径分配约束**：这两个渲染器（`hud.rs` / `mini_hud.rs` / `circle_hud.rs`）每帧都在跑，
+> 文本一律写进 `FixedBytes`（`write_fmt_str` / `set_text*`），**不允许 `format!`/`to_string()`**——
+> P2 那一轮已经把 22 处 `format!` 清零，改回来等于把每帧 20+ 次分配加回去。
 
 * 错误：无。副作用：无（纯计算；画法只写传入的缓冲）。
 
