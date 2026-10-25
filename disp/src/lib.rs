@@ -448,6 +448,8 @@ pub struct HudLayoutConfig {
     /// **HUD 标签语言文件**：相对安装根的路径，例如 `resource/lang/zh.json`（绝对路径也接受）。
     /// 自建 `resource/lang/xxx.json`（键集与随包两份一致）指过来就能换一套标签。
     ///
+    /// * 随包的 `resource/lang/{zh,en}.json` 是**生成产物**（真值 = `resource/i18n/` 里的
+    ///   `hud.*` 键，由 `scripts/gen_lang.py` 生成；见 `disp/src/i18n.rs` 的头注释）；
     /// * 空 = 随包的中文表 `resource/lang/zh.json`（不看 [`Self::language`]）；
     /// * 由 **core 初始化时读**（`core/src/main.rs`）：只留 `hud.*` 标签，JSON 与中间对象立刻释放；
     /// * 文件不存在 / 解析失败 → HUD 报错退出（`exit 2`），不静默回退。

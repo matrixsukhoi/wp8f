@@ -7,6 +7,10 @@
 //! 随包只有 `zh.json` / `en.json`，用户可自建任意 `xxx.json` 指过来。
 //! **没写就用随包的中文表** —— HUD 不看 GUI 的 `language`，也不认旧语言代码。
 //!
+//! ⚠️ 随包这两份是**生成产物**：`hud.*` 标签的真值在 `resource/i18n/*.json`（15 种语言，
+//! 控制台与 HUD 共用同一套键），`resource/lang/{zh,en}.json` 由 `scripts/gen_lang.py` 生成。
+//! **改标签请改 `resource/i18n/` 再跑生成脚本**（`scripts/tests/i18n_keys.py` 会查是否过期）。
+//!
 //! # 什么时候读
 //!
 //! `core/src/main.rs` 的启动序列里调一次 [`init`]（配置刚读完、字体/语音/窗口/渲染线程都还没起来）。

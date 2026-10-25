@@ -11,6 +11,7 @@
 | `test.sh` | 跑 Rust 单测（本机原生，最快），并打印 Windows 侧 GUI 测试清单 | Linux / WSL |
 | `zip.sh` | 按显式清单打包成 `wp8f-<日期>.zip`，逐项校验 | Linux / WSL |
 | `make_icon.py` | 生成 wp8f logo：`gui/static/logo.svg` + `gui/logo.ico`（需要 Pillow） | 两边都行（Windows python / WSL python3） |
+| `gen_lang.py` | 由 `resource/i18n/*.json` 生成随包 HUD 标签表 `resource/lang/{zh,en}.json`（`--check` 只校验） | 两边都行（只用标准库） |
 | `tests/*.py` | 控制台 GUI 的端到端探针（真托盘/真窗口/真子进程） | **Windows** |
 
 ## 实现原理
@@ -39,6 +40,11 @@
   非系统 DLL 又不在 `REQUIRED` 里的直接失败（issue #1 漏掉 `WebView2Loader.dll` 就是这个缺口），
   顺带确认它是 x64 PE；没有 objdump 只 `warn`。
   `LEAK_RE` 反查泄漏项（`target/`、`logs/`、更新器暂存/回滚目录等）。
+* **标签表生成（`gen_lang.py`）**。HUD 的 `hud.*` 标签**只维护** `resource/i18n/*.json`
+  （15 种语言，控制台与 HUD 共用一套键）；随包的 `resource/lang/{zh,en}.json` 是它的
+  **生成产物**（HUD 的 `hud_lang_path` 与 GUI 的语言下拉仍读这个目录）。
+  `python scripts/gen_lang.py` 重新生成（幂等），`--check` 只校验；`tests/i18n_keys.py`
+  每次都跑一遍 `--check`，所以"改了 i18n 忘了生成"会在对账时红。
 * **探针（`tests/*.py`）**。共同契约：**退出码 2 = 前置不满足**（已有控制台/`wp8f.exe` 在跑、
   产物缺失），1 = 用例失败，0 = 通过；只清理**自己起出来的**进程（绝不 `taskkill` 用户正在用的
   HUD）；截图统一落 `logs/_probe/`。用 Playwright 驱动 WebView2 窗口做 DOM/JS 断言。

@@ -28,11 +28,14 @@
      * 用户自建的 `xxx.json`（不在 SUPPORTED 里）只**报告**不判失败 —— 它可以用
        `hud_lang_path` 指过去、缺的键在运行期回退内嵌 en（`disp/src/i18n.rs` 的 missing/extra
        会记日志）。
+  6. `resource/lang/*.json` 是**生成产物**（`scripts/gen_lang.py` 从 `resource/i18n/` 生成）：
+     跑一遍 `gen_lang.py --check`，过期即失败 —— 否则"改了 i18n 忘了生成"会让 HUD 显示旧标签。
 
 退出码：0 通过；1 对账失败；2 环境不满足（读不到目录/文件）。
 """
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -199,6 +202,20 @@ def main() -> int:
                 tag = "内置" if code in disp_supported else "自建（可用 hud_lang_path 指过去）"
                 print(f"  {code:<12} {n:>4} 键   表本体 {body:>6} B   {tag}")
 
+    # ⑥ 随包 HUD 标签表是**生成产物**：`hud.*` 的真值在 `resource/i18n/`，
+    #    `resource/lang/{zh,en}.json` 由 `scripts/gen_lang.py` 生成。这里跑它的 `--check`，
+    #    保证"改了 i18n 忘了重新生成"会在对账时暴露（否则 HUD 界面上是旧标签）。
+    gen = ROOT / "scripts" / "gen_lang.py"
+    if gen.is_file():
+        r = subprocess.run([sys.executable, str(gen), "--check"], capture_output=True, text=True)
+        if r.returncode != 0:
+            detail = (r.stderr or r.stdout).strip().replace("\n", " ")
+            problems.append(f"resource/lang/ 与 resource/i18n/ 不一致（跑 python scripts/gen_lang.py）：{detail}")
+        elif VERBOSE:
+            print("随包 HUD 标签表：与 resource/i18n/ 一致（scripts/gen_lang.py --check 通过）")
+    else:
+        problems.append(f"找不到生成脚本 {gen.relative_to(ROOT)}（随包 HUD 标签表由它生成）")
+
     if VERBOSE:
         print(f"基准语言 {BASE}：{len(base_keys)} 键")
         for code, n, b in rows:
@@ -212,8 +229,9 @@ def main() -> int:
             print(f"    - {p}", file=sys.stderr)
         print("\n  怎么办：文案以 `resource/i18n/en.json`（兜底语言）为准逐键补齐；"
               "改语言代码要同时改**文件名**、`_lang`、`SUPPORTED` 与 `LEGACY_ALIASES`；"
-              "HUD 的标签表在 `resource/lang/`（键集 = i18n 里全部 `hud.*` 键）"
-              "（见 docs/i18n.md §2/§4）。", file=sys.stderr)
+              "HUD 的标签表 `resource/lang/` 是**生成产物**（真值 = i18n 里的全部 `hud.*` 键），"
+              "改完 i18n 要跑 `python scripts/gen_lang.py`（见 docs/i18n.md §2/§4）。",
+              file=sys.stderr)
         return 1
 
     print(f"✓ i18n 键集对账通过：{len(disk)} 种界面语言 × {len(base_keys)} 键 + "
