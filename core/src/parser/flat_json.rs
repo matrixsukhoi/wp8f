@@ -115,6 +115,57 @@ fn extract_index(key: &str, prefix: &str, suffix: &str) -> Option<usize> {
     key[prefix.len()..key.len() - suffix.len()].parse().ok()
 }
 
+/// 发动机键：`(key 前缀, key 后缀, 解析并写进哪个字段)`。
+///
+/// 这 11 个键的解析逐字相同：取索引 → 该槽第一次出现时先清零 → 写字段 → 更新最大索引。
+/// 以前是 11 段各 8 行的 `_ if key.starts_with("…") => { … }` 样板（约 90 行），
+/// **加一个发动机键现在只需在这里加一行**。
+type EngineKeySetter = fn(&mut super::EngineState, &str);
+const ENGINE_KEYS: &[(&str, &str, EngineKeySetter)] = &[
+    ("throttle ", ", %", |e, v| e.throttle = parse_f64_or(v, 0.0)),
+    ("power ", ", hp", |e, v| e.power = parse_f64_or(v, 0.0)),
+    ("thrust ", ", kgs", |e, v| e.thrust = parse_f64_or(v, 0.0)),
+    ("RPM ", "", |e, v| e.rpm = parse_f64_or(v, 0.0)),
+    ("manifold pressure ", ", atm", |e, v| e.manifold = parse_f64_or(v, 0.0)),
+    ("efficiency ", ", %", |e, v| e.efficiency = parse_f64_or(v, 0.0)),
+    ("pitch ", ", deg", |e, v| e.pitch = parse_f64_or(v, 0.0)),
+    ("oil temp ", ", C", |e, v| e.oil_temp = parse_f64_or(v, 0.0)),
+    ("mixture ", ", %", |e, v| e.mixture = parse_f64_or(v, 0.0)),
+    ("radiator ", ", %", |e, v| e.radiator = parse_f64_or(v, 0.0)),
+    ("magneto ", "", |e, v| e.magneto = parse_f64(v).unwrap_or(0.0) as i32),
+];
+
+/// 表驱动的发动机键解析：命中就写进 `state` 并返回 `true`（未知键返回 `false`，交给调用方跳过）。
+///
+/// 索引越界 / `idx == 0` 的键**吃掉但不写**（与旧的逐键写法一致：`idx - 1` 越界后不落任何字段，
+/// 也不更新 `max_engine_idx`；这里用 `checked_sub` 顺手消掉了旧写法在 debug 下的下溢 panic 风险）。
+fn set_engine_key(
+    key: &str,
+    val: &str,
+    state: &mut super::FlightState,
+    engine_seen: &mut [bool; MAX_ENGINES],
+    max_engine_idx: &mut usize,
+) -> bool {
+    let Some((idx, apply)) = ENGINE_KEYS.iter().find_map(|(prefix, suffix, apply)| {
+        if !key.starts_with(prefix) || key.len() < prefix.len() + suffix.len() {
+            return None;
+        }
+        extract_index(key, prefix, suffix).map(|idx| (idx, *apply))
+    }) else {
+        return false;
+    };
+    let Some(slot) = idx.checked_sub(1).filter(|s| *s < MAX_ENGINES) else {
+        return true;
+    };
+    if !engine_seen[slot] {
+        state.engines[slot] = Default::default();
+        engine_seen[slot] = true;
+    }
+    apply(&mut state.engines[slot], val);
+    *max_engine_idx = (*max_engine_idx).max(idx);
+    true
+}
+
 pub fn parse_f64_2(val: &str) -> [f64; 2] {
     let b = val.as_bytes();
     let mut p = 2;
@@ -184,118 +235,12 @@ pub fn parse_state_json(json: &str, state: &mut crate::FlightState) -> bool {
             "Mfuel0, kg" => state.fuel0 = parse_f64_or(val, 0.0),
             "Mfuel 1, kg" => state.fuel1 = parse_f64_or(val, 0.0),
 
-            _ if key.starts_with("throttle ") => {
-                if let Some(idx) = extract_index(key, "throttle ", ", %") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].throttle = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
+            _ => {
+                // 发动机键（10 个 f64 + magneto）统一走表；其余未知键把值整段吃掉
+                if !set_engine_key(key, val, state, &mut engine_seen, &mut max_engine_idx) {
+                    iter.next_values();
                 }
             }
-            _ if key.starts_with("power ") => {
-                if let Some(idx) = extract_index(key, "power ", ", hp") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].power = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("thrust ") => {
-                if let Some(idx) = extract_index(key, "thrust ", ", kgs") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].thrust = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("RPM ") => {
-                if let Some(idx) = extract_index(key, "RPM ", "") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].rpm = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("manifold pressure ") => {
-                if let Some(idx) = extract_index(key, "manifold pressure ", ", atm") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].manifold = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("efficiency ") => {
-                if let Some(idx) = extract_index(key, "efficiency ", ", %") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].efficiency = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("pitch ") => {
-                if let Some(idx) = extract_index(key, "pitch ", ", deg") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].pitch = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("oil temp ") => {
-                if let Some(idx) = extract_index(key, "oil temp ", ", C") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].oil_temp = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("mixture ") => {
-                if let Some(idx) = extract_index(key, "mixture ", ", %") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].mixture = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("radiator ") => {
-                if let Some(idx) = extract_index(key, "radiator ", ", %") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].radiator = parse_f64_or(val, 0.0);
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-            _ if key.starts_with("magneto ") => {
-                if let Some(idx) = extract_index(key, "magneto ", "") {
-                    let s = idx - 1;
-                    if s < MAX_ENGINES {
-                        if !engine_seen[s] { state.engines[s] = Default::default(); engine_seen[s] = true; }
-                        state.engines[s].magneto = parse_f64(val).unwrap_or(0.0) as i32;
-                        if idx > max_engine_idx { max_engine_idx = idx; }
-                    }
-                }
-            }
-
-            _ => { iter.next_values(); }
         }
     }
 
@@ -424,6 +369,17 @@ mod tests {
         assert!((state.engines[0].throttle - 75.0).abs() < 0.01);
         assert!((state.engines[0].power - 2000.0).abs() < 0.01);
         assert!((state.engines[1].thrust - 500.0).abs() < 0.01);
+    }
+
+    /// 发动机键表：索引 `0` / 越界**吃掉但不写**、不 panic（旧写法 `idx - 1` 在 debug 下会下溢）。
+    #[test]
+    fn test_engine_key_out_of_range_is_ignored() {
+        let json = r#"{"valid": true, "throttle 0, %": 50.0, "power 99, hp": 1.0, "throttle 1, %": 75.0}"#;
+        let mut state = crate::FlightState::default();
+        assert!(parse_state_json(json, &mut state));
+        assert_eq!(state.engine_count, 1, "越界索引不能抬高最大发动机数");
+        assert!((state.engines[0].throttle - 75.0).abs() < 0.01);
+        assert_eq!(state.engines[0].power, 0.0, "越界槽不落任何字段");
     }
 
     #[test]
