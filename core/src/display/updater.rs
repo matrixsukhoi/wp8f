@@ -8,8 +8,8 @@ use crate::math::map::{
 };
 use crate::context::FlightContext;
 use crate::frame_clock::Tick;
-use crate::fmt::time::format_duration;
-use crate::fmt::value::{format_adaptive, format_sig_figs};
+use crate::fmt::time::write_duration;
+use crate::fmt::value::{write_adaptive, write_sig_figs};
 use crate::parser::{FlightState, Indicators, MapObjData};
 use crate::constants::{
     FEET_TO_METERS, FUEL_TIME_ROUNDING, GRAVITY, HP_CONVERSION,
@@ -51,10 +51,43 @@ macro_rules! text_or {
 fn set_time_or_dash<const N: usize>(field: &mut FixedBytes<N>, time_val: f64, min: f64, max: f64) {
     if time_val > min && time_val < max {
         let secs = (time_val / FUEL_TIME_ROUNDING).round() * FUEL_TIME_ROUNDING;
-        set_text_str(field, &format_duration(secs));
+        set_duration(field, secs);
     } else {
         set_text_str(field, "-");
     }
+}
+
+/// 零分配写字段：`write_*` 直接写进定长缓冲。
+///
+/// 以前是 `set_text_str(field, &format_sig_figs(..))` —— 每帧为每个这样的字段现分配一个
+/// `String`，只为拷 4-6 个字节进 `FixedBytes`。下面三个小包装就是这两步的合体。
+fn set_sig<const N: usize>(field: &mut FixedBytes<N>, value: f64, sigfigs: usize) {
+    field.clear();
+    let _ = write_sig_figs(field, value, sigfigs);
+}
+
+fn set_adaptive<const N: usize>(field: &mut FixedBytes<N>, value: f64, base_decimals: i32) {
+    field.clear();
+    let _ = write_adaptive(field, value, base_decimals);
+}
+
+fn set_duration<const N: usize>(field: &mut FixedBytes<N>, total_secs: f64) {
+    field.clear();
+    let _ = write_duration(field, total_secs);
+}
+
+/// 安全比值：分母缺失（≤0）→ 0（"该向不参与"的统一口径，省掉每处 if/else）。
+fn ratio(value: f64, limit: f64) -> f64 {
+    if limit > 0.0 {
+        value / limit
+    } else {
+        0.0
+    }
+}
+
+/// 安全百分比：`part / whole × 100`，分母缺失 → 0（不夹上限，需要上限的调用方自己 `.min`）。
+fn percent(part: f64, whole: f64) -> f64 {
+    ratio(part, whole) * 100.0
 }
 
 fn write_manifold_pressure_value<const N: usize>(field: &mut FixedBytes<N>, manifold_atm: f64, imperial: bool) {
@@ -364,11 +397,7 @@ fn update_engine_display(state: &FlightState, indic: &Indicators, display_data: 
         0.0
     };
 
-    display_data.thrust_percent = if reference_thrust > 0.0 {
-        thrust_sum / reference_thrust * 100.0
-    } else {
-        0.0
-    };
+    display_data.thrust_percent = percent(thrust_sum, reference_thrust);
 }
 
 fn advance_work_times(
@@ -483,10 +512,11 @@ fn update_performance_metrics(
     display_data.energy_height = display_data.altitude + (tas_ms * tas_ms) / (2.0 * GRAVITY);
     let rated_power: f64 = display_data.engine_power[..display_data.engine_count].iter().sum();
     ctx.rated_power = rated_power;
-    let efficiency = if rated_power > 0.0 && !ctx.is_jet {
-        (display_data.total_hp / rated_power * 100.0).min(100.0)
-    } else {
+    // 效率 = 实功率 / 额定功率，上限 100%；喷气机没有"活塞功率效率"这个概念
+    let efficiency = if ctx.is_jet {
         0.0
+    } else {
+        percent(display_data.total_hp, rated_power).min(100.0)
     };
     display_data.engine_efficiency = efficiency;
     display_data.is_fm_valid = ctx.fm_is_valid;
@@ -562,7 +592,7 @@ fn calculate_fuel(
     };
     display_data.fuel_kg = ctx.fuel;
     // fuel0 = 0（机型数据缺失）时百分比无意义：写 0，别让 NaN 一路进屏幕与 `.wpr`
-    display_data.fuel_percent = if state.fuel0 > 0.0 { ctx.fuel / state.fuel0 * 100.0 } else { 0.0 };
+    display_data.fuel_percent = percent(ctx.fuel, state.fuel0);
     ctx.high_precision_fuel = ctx.is_jet || indic.fuel > 0.0 || indic.fuel_tank_count > 0;
 
     let (fuel_time, flow, sfc) = update_fuel_branch(
@@ -973,17 +1003,9 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     text_or!(&mut display_data.fuel1_kg_text, display_data.has_fuel1, "-", "{:.0}", display_data.fuel1_kg);
     set_time_or_dash(&mut display_data.fuel1_time_text, display_data.fuel1_time, 0.0, INFINITE_FUEL_TIME);
 
-    // SFC text（小数位数按量级自适应）
-    if display_data.fuel_sfc > 0.0 {
-        set_text_str(&mut display_data.fuel_sfc_text, &format_adaptive(display_data.fuel_sfc, 3));
-    } else {
-        set_text_str(&mut display_data.fuel_sfc_text, "-");
-    }
-    if display_data.fuel1_sfc > 0.0 {
-        set_text_str(&mut display_data.fuel1_sfc_text, &format_adaptive(display_data.fuel1_sfc, 3));
-    } else {
-        set_text_str(&mut display_data.fuel1_sfc_text, "-");
-    }
+    // SFC text（小数位数按量级自适应；非正值由 `write_adaptive` 自己写 "-"）
+    set_adaptive(&mut display_data.fuel_sfc_text, display_data.fuel_sfc, 3);
+    set_adaptive(&mut display_data.fuel1_sfc_text, display_data.fuel1_sfc, 3);
 
     // 飞行时长 = 帧数 × 标称节拍（`refresh_hz`），不用每帧实测的 interval（会累积抖动）
     let elapsed_secs = if tick.frame > 0 {
@@ -991,10 +1013,10 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     } else {
         0.0
     };
-    set_text_str(&mut display_data.elapsed_time_text, &format_duration(elapsed_secs));
+    set_duration(&mut display_data.elapsed_time_text, elapsed_secs);
 
     text_or!(&mut display_data.engine_rpm_text, ctx.current_max_rpm > 0.0, "0", "{:.0}", ctx.current_max_rpm);
-    set_text_str(&mut display_data.engine_power_text, &format_sig_figs(display_data.total_hp, 3));
+    set_sig(&mut display_data.engine_power_text, display_data.total_hp, 3);
     let eff = display_data.engine_efficiency as i32;
     if eff > 0 && !ctx.is_jet {
         set_text(&mut display_data.power_unit_text, format_args!("Hp/{}%", eff));
@@ -1018,7 +1040,7 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
              "{:.0}", display_data.engine_temp_water[0]);
     text_or!(&mut display_data.engine_temp_oil_text, display_data.engine_temp_oil[0] > 0.0, "-",
              "{:.0}", display_data.engine_temp_oil[0]);
-    set_text_str(&mut display_data.total_thrust_text, &format_sig_figs(display_data.total_thrust, 3));
+    set_sig(&mut display_data.total_thrust_text, display_data.total_thrust, 3);
     set_text(&mut display_data.thrust_percent_text, format_args!("{:.0}", display_data.thrust_percent));
     set_text(&mut display_data.roll_rate_text, format_args!("{:>+4.1}", display_data.wx));
     set_text(&mut display_data.pitch_text, format_args!("{:>+4.1}", -display_data.pitch));
@@ -1037,16 +1059,8 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     // 100%→长鸣阈值，连续线不硬切）后并入取最大。
     // 最后过一道**表速门限**（`gate_by_ias`）：≤ 64 km/h 一律压到 0 —— 地面滑跑/落地滑行
     // 时低速大攻角、过载比也容易顶阈值，不出声；状态机照常推进，长鸣能正常释放。
-    let r_ias = if display_data.vne > 0.0 {
-        display_data.ias / display_data.vne
-    } else {
-        0.0
-    };
-    let r_mach = if display_data.vne_mach > 0.0 {
-        display_data.mach / display_data.vne_mach
-    } else {
-        0.0
-    };
+    let r_ias = ratio(display_data.ias, display_data.vne);
+    let r_mach = ratio(display_data.mach, display_data.vne_mach);
     display_data.maneuver_margin = crate::maneuver_tone::gate_by_ias(
         crate::maneuver_tone::maneuver_margin(
             display_data.aoa,
@@ -1089,7 +1103,7 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     set_text_str(&mut display_data.aircraft_type, ctx.aircraft_type.as_str());
 
     // Drag text
-    set_text_str(&mut display_data.total_drag_text, &format_sig_figs(display_data.total_drag, 2));
+    set_sig(&mut display_data.total_drag_text, display_data.total_drag, 2);
 }
 
 #[cfg(test)]
