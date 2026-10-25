@@ -192,7 +192,7 @@ pub fn update_display_from_state(
     // Phase 2: 格式化（读 → 算 → 格式化 三段里的第三段，全部在这一步做完）
     format_display_text(display_data, ctx, tick);
     // 渲染层文本由显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
-    wp8f_disp::hud_text::fill(display_data);
+    wp8f_disp::hud_fmt::format_display(display_data);
 }
 
 /// 过载告警阈值：|Ny| 达到允许过载的该比例即告警（语音 + 红色，各 panel 统一）
@@ -979,7 +979,7 @@ fn format_map_text(map: &mut MapDisplay, map_info: &crate::parser::MapInfo, near
         crate::math::map::calc_map_zone(player_x, player_y, map_info).as_str(),
     );
     // 渲染层文本归显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
-    wp8f_disp::hud_text::fill_map(map);
+    wp8f_disp::hud_fmt::format_map(map);
 }
 
 fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick: &Tick) {

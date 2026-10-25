@@ -11,6 +11,7 @@ pub mod draw;
 pub mod font;
 pub(crate) mod geometry;
 pub mod hud;
+pub mod hud_fmt;
 pub mod hud_text;
 mod hud_common;
 pub use hud_common::{map_zone_label, MapZone};
