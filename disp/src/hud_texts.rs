@@ -10,6 +10,18 @@
 
 use super::FixedBytes;
 
+/// 友军面板一行（已格式化好的数值列）。
+#[derive(Debug, Clone, Default)]
+pub struct LinkRowText {
+    pub ias: FixedBytes<8>,
+    pub alt: FixedBytes<8>,
+    pub hdg: FixedBytes<8>,
+    pub dist: FixedBytes<8>,
+}
+
+/// 友军面板最多画几行（与 `hud::link_panel::MAX_FRIENDLY_ROWS` 一致）。
+pub const MAX_LINK_ROWS: usize = 8;
+
 #[derive(Debug, Clone, Default)]
 pub struct HudTexts {
     // —— 飞行信息面板（12 格）与友军面板共用的语义文本 ——
@@ -95,6 +107,18 @@ pub struct HudTexts {
     pub mini_poi_text: FixedBytes<16>,
     pub poi_speed_text: FixedBytes<8>,
     pub mini_poi_speed_text: FixedBytes<8>,
+
+    // —— 状态项 / 地图信息行 / 友军面板 ——
+    /// 状态项 `F20`（襟翼；0 时为空）
+    pub flaps_text: FixedBytes<8>,
+    /// 状态项 `W100`（后掠百分比；0 时为空）
+    pub wing_sweep_text: FixedBytes<8>,
+    /// 地图信息第一行：`Zone D3 0°`
+    pub map_zone_line: FixedBytes<40>,
+    /// 地图信息第三行：`POI 17.5km / 172° / 63m`（无邻近目标时就是最近目标那行）
+    pub map_poi_line: FixedBytes<96>,
+    /// 友军面板每行的数值列
+    pub link_rows: [LinkRowText; MAX_LINK_ROWS],
 }
 
 impl HudTexts {

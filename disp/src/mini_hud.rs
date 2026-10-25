@@ -185,7 +185,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
 
         // Line 2: Config (flaps, wing, brake, gear)
         let config_y = start_y + line_spacing * 3.0;
-        let config_items = crate::hud_common::status_items(data, colors);
+        let config_items = crate::hud_common::status_items(data, texts, colors);
         if !config_items.is_empty() {
             crate::hud_common::draw_inline_items(buffer, width, height, font, info_x, config_y, &config_items, font_size);
         }

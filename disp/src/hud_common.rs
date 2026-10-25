@@ -511,7 +511,9 @@ mod tests {
         d.gear_armed = true;
         d.airbrake = 100.0;
         d.brake_caution = true;
-        let items = status_items(&d, colors);
+        let mut texts = crate::hud_texts::HudTexts::default();
+        crate::hud_fmt::format_all(&mut texts, &d, &MapDisplay::default());
+        let items = status_items(&d, &texts, colors);
         assert!(items.as_slice().iter().any(|i| i.text() == "GEA"), "放开中应显示 GEA");
         assert!(items.as_slice().iter().any(|i| i.text() == "BRK"), "放开中应显示 BRK");
 
@@ -520,7 +522,9 @@ mod tests {
         d.gear_armed = false;
         d.airbrake = 40.0;
         d.brake_caution = false;
-        let items = status_items(&d, colors);
+        let mut texts = crate::hud_texts::HudTexts::default();
+        crate::hud_fmt::format_all(&mut texts, &d, &MapDisplay::default());
+        let items = status_items(&d, &texts, colors);
         assert!(!items.as_slice().iter().any(|i| i.text() == "GEA"), "收回中应隐藏 GEA");
         assert!(!items.as_slice().iter().any(|i| i.text() == "BRK"), "收回中应隐藏 BRK");
     }
@@ -636,24 +640,21 @@ impl StatusItems {
         }
     }
 
-    fn push_args(&mut self, args: std::fmt::Arguments<'_>, color: u32) {
-        if let Some(slot) = self.items.get_mut(self.len) {
-            let _ = std::fmt::Write::write_fmt(&mut slot.text, args);
-            slot.color = color;
-            self.len += 1;
-        }
-    }
 }
 
-pub fn status_items(data: &DisplayData, colors: &HudColors) -> StatusItems {
+pub fn status_items(
+    data: &DisplayData,
+    texts: &crate::hud_texts::HudTexts,
+    colors: &HudColors,
+) -> StatusItems {
     let mut out = StatusItems::default();
     let data_color = colors.data_u32();
     let unit_color = colors.unit_u32();
     if data.flaps > 0.0 {
-        out.push_args(format_args!("F{:.0}", data.flaps), data_color);
+        out.push_text(texts.flaps_text.as_str(), data_color);
     }
     if data.wing_sweep > 0.0 {
-        out.push_args(format_args!("W{:.0}", (data.wing_sweep * 100.0).round()), data_color);
+        out.push_text(texts.wing_sweep_text.as_str(), data_color);
     }
     // BRK/GEA 与告警共用同一套边沿判定：上升沿/保持（放开中）显示、100% 绿色，
     // 放开未到位灰色；下降沿（收回中）整项隐藏（不再以灰色显示）

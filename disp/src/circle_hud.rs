@@ -194,7 +194,7 @@ fn draw_speed_aoa(
 
     // Row 4: status items (BRK, GEA, F, W)
     let row3_y = row2_y + font_sz + line_gap;
-    let items = crate::hud_common::status_items(data, colors);
+    let items = crate::hud_common::status_items(data, texts, colors);
     if !items.is_empty() {
         crate::hud_common::draw_inline_items(buffer, width, height, font, x, row3_y, &items, font_sz);
     }

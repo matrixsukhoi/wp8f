@@ -342,6 +342,9 @@ fn draw_map_background(
     }
 }
 
+/// 圆环标注文本（`dist_km / 10`，与下面的环半径列表一一对应）。
+const RING_LABELS: [&str; 6] = ["8", "6", "4", "3", "2", "1"];
+
 fn draw_range_rings(
     buffer: &mut [u32],
     buf_width: usize,
@@ -380,7 +383,7 @@ fn draw_range_rings(
             Some((map_x0, map_y0, map_x1, map_y1)),
         );
 
-        let label = format!("{:.0}", dist_km / 10.0);
+        let label = RING_LABELS[i];
         FONT.with(|font| {
             let tw = measure_text_raw(font, &label, map_font_size);
             // 只在圆环**上方**标一次距离（用户要求：下方那个重复标注已移除）
@@ -397,8 +400,7 @@ fn draw_map_info_text(
     buffer: &mut [u32],
     buf_width: usize,
     buf_height: usize,
-    map: &MapDisplay,
-    heading: f64,
+    _map: &MapDisplay,
     map_x: usize,
     map_y: usize,
     map_w: usize,
@@ -406,16 +408,10 @@ fn draw_map_info_text(
     data_color: u32,
     font_size: f32,
  texts: &crate::hud_texts::HudTexts, ) {
-    let loc_text = format!("Zone {} {:.0}°",
-        String::from_utf8_lossy(texts.map_zone_text.as_bytes()), heading);
-    let airfield_text = String::from_utf8_lossy(texts.nearest_airfield_text.as_bytes());
-    let poi_info_text = String::from_utf8_lossy(texts.nearest_poi_text.as_bytes());
-
-    let poi_line = if map.nearest_poi_neighbor_dist < f64::MAX {
-        format!("{} / {:.0}m", poi_info_text, map.nearest_poi_neighbor_dist)
-    } else {
-        poi_info_text.to_string()
-    };
+    // 三条信息行都在 `hud_fmt::format_map` 里格式化好了
+    let loc_text = texts.map_zone_line.as_str();
+    let airfield_text = texts.nearest_airfield_text.as_str();
+    let poi_line = texts.map_poi_line.as_str();
 
     let text_right_x = map_x as f32 + map_w as f32 - font_size * 0.3;
     let text_y1 = map_y as f32 + font_size * 0.25;
@@ -450,7 +446,7 @@ pub fn draw_map_panel(
     buf_height: usize,
     map: &MapDisplay,
     img: &crate::MapImage,
-    data: &DisplayData, texts: &crate::hud_texts::HudTexts,
+    _data: &DisplayData, texts: &crate::hud_texts::HudTexts,
     link_tracks: &[datalink::StatePacket],
     map_x: usize,
     map_y: usize,
@@ -534,7 +530,7 @@ pub fn draw_map_panel(
     draw_datalink_tracks(buffer, buf_width, buf_height, link_tracks, player_x, player_y, map_x, map_y, map_w, map_h);
 
     draw_range_rings(buffer, buf_width, buf_height, map, map_x, map_y, map_w, map_h, map_font_size, ring_color_base);
-    draw_map_info_text(buffer, buf_width, buf_height, map, data.heading, map_x, map_y, map_w, map_h, data_color, map_font_size, &texts);
+    draw_map_info_text(buffer, buf_width, buf_height, map, map_x, map_y, map_w, map_h, data_color, map_font_size, &texts);
 }
 
 /// Link-8 友军：与地图对象同一投影公式（地图以玩家为中心），

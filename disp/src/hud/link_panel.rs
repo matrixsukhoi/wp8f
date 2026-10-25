@@ -55,6 +55,7 @@ pub fn draw_link_panel(
     buf_height: usize,
     font: &ab_glyph::FontRef,
     map: &MapDisplay,
+    texts: &crate::hud_texts::HudTexts,
     tracks: &[datalink::StatePacket],
     x: f32,
     y: f32,
@@ -95,18 +96,13 @@ pub fn draw_link_panel(
         }
         let ry = y + (row as f32 + 2.0) * line_h;
 
-        // 距离：归一化地图坐标差 × 地图尺寸（米）
-        let dx = t.x - map.player_map_x;
-        let dy = t.y - map.player_map_y;
-        let dist_km = (dx * dx + dy * dy).sqrt() * map.map_maxsize[0] / 1000.0;
-
+        // 数值列由 `hud_fmt::format_link` 预先格式化好（绘制期不做格式化）
+        let r = &texts.link_rows[row];
         draw_text_raw(buffer, buf_width, buf_height, font, x + COL_TYPE * font_size, ry, t.type_str(), font_size, colors.data_u32());
-        // 数值列：栈上缓冲格式化（每行 5 个数字，以前每格一次 `format!` 分配）
-        let mut num = crate::FixedBytes::<8>::new();
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_IAS * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.ias)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_ALT * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.altitude)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_HDG * font_size, ry, num.write_fmt_str(format_args!("{:.0}", t.heading)), font_size, colors.data_u32());
-        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_DIST * font_size, ry, num.write_fmt_str(format_args!("{:.1}", dist_km)), font_size, colors.poi_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_IAS * font_size, ry, r.ias.as_str(), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_ALT * font_size, ry, r.alt.as_str(), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_HDG * font_size, ry, r.hdg.as_str(), font_size, colors.data_u32());
+        draw_text_raw(buffer, buf_width, buf_height, font, x + COL_DIST * font_size, ry, r.dist.as_str(), font_size, colors.poi_u32());
 
         // 区域：由归一化坐标 + 本地地图网格推导（如 D3）——`MapZone` 是栈上定长，零分配
         let zone = crate::hud_common::map_zone_of(map, t.x, t.y);
@@ -135,8 +131,10 @@ mod tests {
     fn draw(tracks: &[datalink::StatePacket]) -> Vec<u32> {
         let mut buf = vec![0u32; W * H];
         let map = map_with_player();
+        let mut texts = crate::hud_texts::HudTexts::default();
+        crate::hud_fmt::format_link(&mut texts, tracks, &map);
         crate::FONT.with(|font| {
-            draw_link_panel(&mut buf, W, H, font, &map, tracks, 0.0, 0.0, 16.0);
+            draw_link_panel(&mut buf, W, H, font, &map, &texts, tracks, 0.0, 0.0, 16.0);
         });
         buf
     }

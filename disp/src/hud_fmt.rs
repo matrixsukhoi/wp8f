@@ -269,6 +269,17 @@ fn format_panel(t: &mut HudTexts, d: &DisplayData, _m: &MapDisplay) {
     write_remain_or_dash(&mut t.oil_crit_temp_text, d.oil_remain_secs);
     // 加力剩余时间：当前没有数据源（与迁移前一致，恒空）
     t.afterburner_fuel_time_text.clear();
+    // 状态项（F/W）：只在有值时才写，渲染侧按"文本是否为空"决定画不画
+    if d.flaps > 0.0 {
+        set_text(&mut t.flaps_text, format_args!("F{:.0}", d.flaps));
+    } else {
+        t.flaps_text.clear();
+    }
+    if d.wing_sweep > 0.0 {
+        set_text(&mut t.wing_sweep_text, format_args!("W{:.0}", (d.wing_sweep * 100.0).round()));
+    } else {
+        t.wing_sweep_text.clear();
+    }
     set_sig(&mut t.total_drag_text, d.total_drag, 2);
 }
 
@@ -307,13 +318,20 @@ fn format_hud_type(t: &mut HudTexts, d: &DisplayData, _m: &MapDisplay) {
 }
 
 // -------------------------------------------------------------- 地图面板 --
-fn format_map(t: &mut HudTexts, _d: &DisplayData, m: &MapDisplay) {
+fn format_map(t: &mut HudTexts, d: &DisplayData, m: &MapDisplay) {
     write_format_dist(&mut t.nearest_airfield_text, "AF", m.nearest_airfield_dist, m.nearest_airfield_bearing);
     write_format_dist(&mut t.nearest_bombing_point_text, "BP", m.nearest_bombing_dist, m.nearest_bombing_bearing);
     write_format_dist(&mut t.nearest_poi_text, "POI", m.nearest_poi_dist, m.nearest_poi_bearing);
     // 区域格：算法单一实现在 `hud_common::map_zone_label`（友军面板共用）
     let zone = crate::hud_common::map_zone_of(m, m.player_map_x, m.player_map_y);
     set_text_str(&mut t.map_zone_text, zone.as_str());
+    set_text(&mut t.map_zone_line, format_args!("Zone {} {:.0}°", zone.as_str(), d.heading));
+    if m.nearest_poi_neighbor_dist < f64::MAX {
+        set_text(&mut t.map_poi_line,
+                 format_args!("{} / {:.0}m", t.nearest_poi_text.as_str(), m.nearest_poi_neighbor_dist));
+    } else {
+        set_text_str(&mut t.map_poi_line, t.nearest_poi_text.as_str());
+    }
 
     if m.nearest_poi_dist >= f64::MAX {
         t.poi_text.clear();
@@ -349,6 +367,34 @@ fn format_map(t: &mut HudTexts, _d: &DisplayData, m: &MapDisplay) {
     };
     set_text(&mut t.mini_poi_text, format_args!("{:<2}{:>3.0}", mini_prefix, dist));
     set_text(&mut t.mini_poi_speed_text, format_args!(" {:+.0}", m.nearest_poi_rel_speed));
+}
+
+/// 友军面板每行的数值列（数据来自数据链快照，不进环）。
+pub fn format_link(t: &mut HudTexts, tracks: &[datalink::StatePacket], map: &MapDisplay) {
+    let mut row = 0usize;
+    for p in tracks {
+        if p.flags & datalink::FLAG_SENDER != 0 {
+            continue;
+        }
+        if row >= super::hud_texts::MAX_LINK_ROWS {
+            break;
+        }
+        let dx = p.x - map.player_map_x;
+        let dy = p.y - map.player_map_y;
+        let dist_km = (dx * dx + dy * dy).sqrt() * map.map_maxsize[0] / 1000.0;
+        let r = &mut t.link_rows[row];
+        set_text(&mut r.ias, format_args!("{:.0}", p.ias));
+        set_text(&mut r.alt, format_args!("{:.0}", p.altitude));
+        set_text(&mut r.hdg, format_args!("{:.0}", p.heading));
+        set_text(&mut r.dist, format_args!("{:.1}", dist_km));
+        row += 1;
+    }
+    for r in t.link_rows[row..].iter_mut() {
+        r.ias.clear();
+        r.alt.clear();
+        r.hdg.clear();
+        r.dist.clear();
+    }
 }
 
 #[cfg(test)]

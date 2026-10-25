@@ -137,6 +137,7 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
     let mut texts = HudTexts::default();
     crate::hud_fmt::format_all(&mut texts, data, map);
     let link_tracks = datalink::link_ring::latest_tracks();
+    crate::hud_fmt::format_link(&mut texts, &link_tracks, map);
 
     let scale = TextScale::new(crate::hud_layout().font_size).with_scale(1.25);
     let padding = scale.label_size() * 0.5;
@@ -311,6 +312,7 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
                 height,
                 font,
                 map,
+                &texts,
                 &link_tracks,
                 link_x,
                 link_y,
