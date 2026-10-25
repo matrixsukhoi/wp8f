@@ -26,6 +26,11 @@ use winit::event_loop::EventLoopProxy;
 mod fixed_bytes;
 pub use fixed_bytes::FixedBytes;
 
+mod clamp;
+pub use clamp::{Clamp, REFRESH_HZ_RANGE, RING_SLOTS_RANGE};
+mod hud_type;
+pub use hud_type::{default_hud_type, HudType};
+
 pub const DEFAULT_FONT_SIZE: f32 = 16.0;
 
 /// 颜色配置的字符串格式：**`#RRGGBBAA`**（前 6 位 RGB、末 2 位 alpha；只写 6 位视为不透明）。
@@ -139,8 +144,6 @@ fn default_voice_path() -> String {
     "resource/voice/zh_xiaoxuan_calm_youngadultfemale_1_04".to_string()
 }
 
-mod clamp;
-pub use clamp::{Clamp, REFRESH_HZ_RANGE, RING_SLOTS_RANGE};
 /// 飞行记录配置（布局配置 JSON 的 `record` 段）。
 ///
 /// 记录写成 wp8f 自有的 `.wpr`（地图信息 + 底图 + N 组逐帧 CSV）；归一化地图坐标原样入档，
@@ -428,8 +431,6 @@ impl Default for HudLayoutConfig {
     }
 }
 
-mod hud_type;
-pub use hud_type::{default_hud_type, HudType};
 
 static DRAG_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
