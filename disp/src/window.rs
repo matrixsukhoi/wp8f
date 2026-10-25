@@ -3,19 +3,25 @@
 //!
 //! 从 `lib.rs` 拆出的一块；对外路径不变（`lib.rs` 有 `pub use window::{...}`）。
 //! 这里只做"起窗口 / 喂帧 / 发帧消息"，不决定画什么：渲染在 `hud/`、`mini_hud.rs`、
-//! `circle_hud.rs`，布局快照在 `layout.rs`。
+//! `circle_hud.rs`，布局快照在 `layout.rs`。`DispError` 也归这里：它只装窗口错误。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+use thiserror::Error;
 use winit::event_loop::EventLoopProxy;
 
 use super::drag::DragState;
 use super::layout::hud_layout;
 use super::state::{DisplayData, MapDisplay};
-use super::DispError;
+
+#[derive(Error, Debug)]
+pub enum DispError {
+    #[error("Window error: {0}")]
+    WindowError(String),
+}
 
 static WINDOW_VISIBLE_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);

@@ -269,6 +269,22 @@ pub fn icon_data() -> &'static [u8] {
     ICON.get().copied().unwrap_or_else(|| panic!("{}", missing_error().unwrap_or_default()))
 }
 
+thread_local! {
+    /// 正文字体：启动时从磁盘读入内存的那一份（[`init`]，`Box::leak` 后常驻）。
+    /// 每个线程各自解析一次（`FontRef` 只是借用视图，构造很便宜），
+    /// 所以几十处 `FONT.with(|font| …)` 调用点不用改；渲染路径不再有磁盘 I/O。
+    ///
+    /// 一个字节都没有时 panic 并带上"把字体放回 resource/fonts/"那条错误 ——
+    /// 正常路径早在 [`crate::init_hud_layout`] 里就 `exit(2)` 了，这里只是异常路径的兜底。
+    pub static FONT: FontRef<'static> = FontRef::try_from_slice(data()).unwrap_or_else(|e| {
+        panic!("{}（ab_glyph: {e}）", missing_error().unwrap_or_else(|| "字体加载失败".into()))
+    });
+    /// 图标字体（`resource/fonts/icons.ttf`），同上。
+    pub static ICON_FONT: FontRef<'static> = FontRef::try_from_slice(icon_data()).unwrap_or_else(|e| {
+        panic!("{}（ab_glyph: {e}）", missing_error().unwrap_or_else(|| "图标字体加载失败".into()))
+    });
+}
+
 /// 本次进程的正文字体选择（未初始化时按"配置为空"解析一次）。
 pub fn choice() -> &'static FontChoice {
     init("")
