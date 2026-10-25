@@ -188,10 +188,10 @@ impl<'a> DrawContext<'a> {
         let x1 = (x + w) as i32;
         let y1 = (y + h) as i32;
 
-        let x0 = x0.max(0).min(self.width as i32);
-        let y0 = y0.max(0).min(self.height as i32);
-        let x1 = x1.max(0).min(self.width as i32);
-        let y1 = y1.max(0).min(self.height as i32);
+        let x0 = x0.clamp(0, self.width as i32);
+        let y0 = y0.clamp(0, self.height as i32);
+        let x1 = x1.clamp(0, self.width as i32);
+        let y1 = y1.clamp(0, self.height as i32);
 
         for py in y0..y1 {
             let row_start = (py as usize) * self.width + (x0 as usize);
@@ -209,10 +209,10 @@ impl<'a> DrawContext<'a> {
         let x1 = (x + w) as i32;
         let y1 = (y + h) as i32;
 
-        let x0 = x0.max(0).min(self.width as i32);
-        let y0 = y0.max(0).min(self.height as i32);
-        let x1 = x1.max(0).min(self.width as i32);
-        let y1 = y1.max(0).min(self.height as i32);
+        let x0 = x0.clamp(0, self.width as i32);
+        let y0 = y0.clamp(0, self.height as i32);
+        let x1 = x1.clamp(0, self.width as i32);
+        let y1 = y1.clamp(0, self.height as i32);
 
         // Top edge
         if y0 < self.height as i32 {

@@ -42,6 +42,18 @@ impl<const N: usize> FixedBytes<N> {
         std::str::from_utf8(self.as_bytes()).unwrap_or("")
     }
 
+    /// 拷贝成**定长数组**（不足补 0，超出按 `M` 截断）：给"字段必须是 `[u8; M]`"的 POD 结构用
+    /// （`MapObjectDisplay` 的 `obj_type`/`icon` 就是这种）。
+    ///
+    /// 以前调用点写 `std::array::from_fn(|i| fb.as_bytes().get(i).copied().unwrap_or(0))` ——
+    /// 每个元素一次边界检查 + 一次 `unwrap_or`，还看不出在干什么。
+    pub fn to_array<const M: usize>(&self) -> [u8; M] {
+        let mut out = [0u8; M];
+        let n = self.as_bytes().len().min(M);
+        out[..n].copy_from_slice(&self.as_bytes()[..n]);
+        out
+    }
+
     pub fn clear(&mut self) {
         self.len = 0;
     }
@@ -1881,6 +1893,20 @@ mod tests {
             serde_json::to_value(&whole.datalink).unwrap(),
             serde_json::to_value(DataLinkConfig::default()).unwrap()
         );
+    }
+
+    /// `FixedBytes::to_array`：不足补 0、超出按目标宽度截断（给 POD 结构体的定长字段用）。
+    #[test]
+    fn fixed_bytes_to_array_pads_and_truncates() {
+        let mut short: FixedBytes<8> = FixedBytes::new();
+        short.assign(b"ab");
+        assert_eq!(short.to_array::<4>(), [b'a', b'b', 0, 0], "不足补 0");
+
+        let mut long: FixedBytes<8> = FixedBytes::new();
+        long.assign(b"abcdef");
+        assert_eq!(long.to_array::<4>(), *b"abcd", "超出按目标宽度截断");
+        assert_eq!(long.to_array::<8>(), [b'a', b'b', b'c', b'd', b'e', b'f', 0, 0]);
+        assert_eq!(FixedBytes::<8>::new().to_array::<4>(), [0u8; 4]);
     }
 
     /// 配置派生量的区间：默认值必须落在区间内，且区间端点就是"生效上下限"。

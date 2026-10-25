@@ -515,9 +515,7 @@ fn row_of(d: &DisplayData, fallback_ns: u64) -> RecordRow {
     ];
     RecordRow {
         time_ns: t,
-        type_str: String::from_utf8_lossy(d.aircraft_type.as_bytes())
-            .trim_end_matches('\0')
-            .to_string(),
+        type_str: d.aircraft_type.as_str().to_string(),
         v,
     }
 }

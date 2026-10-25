@@ -6,10 +6,10 @@ pub fn clear_rect(buffer: &mut [u32], buf_width: usize, buf_height: usize, x: f3
     let x1 = (x + w).ceil() as i32;
     let y1 = (y + h).ceil() as i32;
 
-    let x0 = x0.max(0).min(buf_width as i32);
-    let y0 = y0.max(0).min(buf_height as i32);
-    let x1 = x1.max(0).min(buf_width as i32);
-    let y1 = y1.max(0).min(buf_height as i32);
+    let x0 = x0.clamp(0, buf_width as i32);
+    let y0 = y0.clamp(0, buf_height as i32);
+    let x1 = x1.clamp(0, buf_width as i32);
+    let y1 = y1.clamp(0, buf_height as i32);
 
     if x0 >= x1 || y0 >= y1 {
         return;

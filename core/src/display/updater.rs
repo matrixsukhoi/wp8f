@@ -33,6 +33,21 @@ fn set_text_str<const N: usize>(field: &mut FixedBytes<N>, text: &str) {
     field.assign(text.as_bytes());
 }
 
+/// 格式化段里**最高频的模式**：有值就按格式写数字，没值就写占位符（`-` / `0` / `---`）。
+///
+/// 以前每个字段都是五行 `if cond { set_text(...) } else { set_text_str(field, "-") }`，
+/// 占位符散在十几个分支里 —— 一行写法把"条件/占位符/格式"摆在调用点上：
+/// `text_or!(字段, 条件, "占位符", "格式", 参数…)`。
+macro_rules! text_or {
+    ($field:expr, $cond:expr, $placeholder:literal, $fmt:literal $(, $arg:expr)*) => {
+        if $cond {
+            set_text($field, format_args!($fmt $(, $arg)*));
+        } else {
+            set_text_str($field, $placeholder);
+        }
+    };
+}
+
 fn set_time_or_dash<const N: usize>(field: &mut FixedBytes<N>, time_val: f64, min: f64, max: f64) {
     if time_val > min && time_val < max {
         let secs = (time_val / FUEL_TIME_ROUNDING).round() * FUEL_TIME_ROUNDING;
@@ -768,12 +783,9 @@ fn populate_map_objects(
             let Some(coords) = extract_map_object_coords(item) else {
                 continue;
             };
-            let obj_x = coords.x;
-            let obj_y = coords.y;
-            let obj_dx = coords.dx;
-            let obj_dy = coords.dy;
-
-            if item.icon.as_str() == "Player" {
+            let (obj_x, obj_y, obj_dx, obj_dy) = (coords.x, coords.y, coords.dx, coords.dy);
+            let is_player = item.icon.as_str() == "Player";
+            if is_player {
                 player_x = obj_x;
                 player_y = obj_y;
                 player_dx = item.dx.unwrap_or(0.0);
@@ -781,12 +793,8 @@ fn populate_map_objects(
             }
 
             let distance = calc_distance_to_player(player_x, player_y, obj_x, obj_y, map_info);
-            let is_player = item.icon.as_str() == "Player";
-
-            let obj_type: [u8; 32] =
-                std::array::from_fn(|i| item.obj_type.as_bytes().get(i).copied().unwrap_or(0));
-
-            let icon: [u8; 16] = std::array::from_fn(|i| item.icon.as_bytes().get(i).copied().unwrap_or(0));
+            let obj_type: [u8; 32] = item.obj_type.to_array();
+            let icon: [u8; 16] = item.icon.to_array();
 
             let color = parse_hex_color(item.color.as_str());
 
@@ -957,24 +965,12 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     set_text(&mut display_data.mach_text, format_args!("{:.2}", display_data.mach));
     set_text(&mut display_data.vy_text, format_args!("{:+.1}", display_data.vy));
     set_text(&mut display_data.sep_text, format_args!("{:+.0}", round_sep(display_data.sep)));
-    if display_data.turn_rate < 999.0 {
-        set_text(&mut display_data.turn_rate_text, format_args!("{:.1}", display_data.turn_rate));
-    } else {
-        set_text_str(&mut display_data.turn_rate_text, "---");
-    }
-    if display_data.turn_radius < 99999.0 {
-        set_text(&mut display_data.turn_radius_text, format_args!("{:.0}", display_data.turn_radius));
-    } else {
-        set_text_str(&mut display_data.turn_radius_text, "-");
-    }
+    text_or!(&mut display_data.turn_rate_text, display_data.turn_rate < 999.0, "---", "{:.1}", display_data.turn_rate);
+    text_or!(&mut display_data.turn_radius_text, display_data.turn_radius < 99999.0, "-", "{:.0}", display_data.turn_radius);
     set_text(&mut display_data.fuel_kg_text, format_args!("{:.0}", display_data.fuel_kg));
     set_text(&mut display_data.fuel_percent_text, format_args!("{:.0}", display_data.fuel_percent));
     set_time_or_dash(&mut display_data.fuel_time_text, display_data.fuel_time, 0.0, INFINITE_FUEL_TIME);
-    if display_data.has_fuel1 {
-        set_text(&mut display_data.fuel1_kg_text, format_args!("{:.0}", display_data.fuel1_kg));
-    } else {
-        set_text_str(&mut display_data.fuel1_kg_text, "-");
-    }
+    text_or!(&mut display_data.fuel1_kg_text, display_data.has_fuel1, "-", "{:.0}", display_data.fuel1_kg);
     set_time_or_dash(&mut display_data.fuel1_time_text, display_data.fuel1_time, 0.0, INFINITE_FUEL_TIME);
 
     // SFC text（小数位数按量级自适应）
@@ -997,11 +993,7 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
     };
     set_text_str(&mut display_data.elapsed_time_text, &format_duration(elapsed_secs));
 
-    if ctx.current_max_rpm > 0.0 {
-        set_text(&mut display_data.engine_rpm_text, format_args!("{:.0}", ctx.current_max_rpm));
-    } else {
-        set_text_str(&mut display_data.engine_rpm_text, "0");
-    }
+    text_or!(&mut display_data.engine_rpm_text, ctx.current_max_rpm > 0.0, "0", "{:.0}", ctx.current_max_rpm);
     set_text_str(&mut display_data.engine_power_text, &format_sig_figs(display_data.total_hp, 3));
     let eff = display_data.engine_efficiency as i32;
     if eff > 0 && !ctx.is_jet {
@@ -1016,29 +1008,16 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
         display_data.engine_rpm_unit.clear();
     }
     let rated_power = if !fm.is_jet { ctx.rated_power } else { 0.0 };
-    if rated_power > 0.0 {
-        set_text(&mut display_data.rated_power_text, format_args!("{:.0}", rated_power));
-    } else {
-        set_text_str(&mut display_data.rated_power_text, "-");
-    }
+    text_or!(&mut display_data.rated_power_text, rated_power > 0.0, "-", "{:.0}", rated_power);
     set_text(&mut display_data.thrust_to_weight_text, format_args!("{:.2}", display_data.thrust_to_weight));
     set_text(&mut display_data.power_to_weight_text, format_args!("{:.2}", display_data.power_to_weight));
-    if display_data.engine_count > 0 {
-        set_text(&mut display_data.engine_throttle_text, format_args!("{:.0}", display_data.engine_throttle[0]));
-    } else {
-        set_text_str(&mut display_data.engine_throttle_text, "0");
-    }
+    text_or!(&mut display_data.engine_throttle_text, display_data.engine_count > 0, "0",
+             "{:.0}", display_data.engine_throttle[0]);
     debug_assert!(display_data.engine_count > 0);
-    if display_data.engine_temp_water[0] > 0.0 {
-        set_text(&mut display_data.engine_temp_water_text, format_args!("{:.0}", display_data.engine_temp_water[0]));
-    } else {
-        set_text_str(&mut display_data.engine_temp_water_text, "-");
-    }
-    if display_data.engine_temp_oil[0] > 0.0 {
-        set_text(&mut display_data.engine_temp_oil_text, format_args!("{:.0}", display_data.engine_temp_oil[0]));
-    } else {
-        set_text_str(&mut display_data.engine_temp_oil_text, "-");
-    }
+    text_or!(&mut display_data.engine_temp_water_text, display_data.engine_temp_water[0] > 0.0, "-",
+             "{:.0}", display_data.engine_temp_water[0]);
+    text_or!(&mut display_data.engine_temp_oil_text, display_data.engine_temp_oil[0] > 0.0, "-",
+             "{:.0}", display_data.engine_temp_oil[0]);
     set_text_str(&mut display_data.total_thrust_text, &format_sig_figs(display_data.total_thrust, 3));
     set_text(&mut display_data.thrust_percent_text, format_args!("{:.0}", display_data.thrust_percent));
     set_text(&mut display_data.roll_rate_text, format_args!("{:>+4.1}", display_data.wx));
@@ -1080,12 +1059,8 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
         ),
         display_data.ias,
     );
-    if pos_lim > 0.0 {
-        // 与表速格 "/1477"（VNE）的单位栏风格一致
-        set_text(&mut display_data.g_limit_text, format_args!("/{:.1}", pos_lim));
-    } else {
-        set_text_str(&mut display_data.g_limit_text, "-");
-    }
+    // 与表速格 "/1477"（VNE）的单位栏风格一致
+    text_or!(&mut display_data.g_limit_text, pos_lim > 0.0, "-", "/{:.1}", pos_lim);
 
     // Manifold pressure
     if display_data.manifold_pressure > 0.0 {

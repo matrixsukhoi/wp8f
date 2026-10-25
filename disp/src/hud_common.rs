@@ -39,7 +39,7 @@ pub fn map_zone_label(
     let col = ((abs_x - grid_zero[0]) / grid_steps[0] + 1.0).floor() as i32;
     let row = ((abs_y + grid_zero[1]) / grid_steps[1]).floor() as i32;
     let letter = (b'A'.wrapping_add(row as u8)) as char;
-    format!("{}{}", letter, col.max(1).min(20))
+    format!("{}{}", letter, col.clamp(1, 20))
 }
 
 /// `map_zone_label` 的 MapDisplay 便捷版（友军面板使用）。

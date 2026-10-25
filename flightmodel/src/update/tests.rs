@@ -228,7 +228,7 @@ fn offline_full_flow_check_download_verify_switch() {
     assert_eq!(switch::read_version(&repo.data_root()).as_deref(), Some(TAG));
     assert!(!repo.staging_root().exists(), "暂存目录应改名成 data");
     assert!(
-        repo.data_root().join("gamedata/flightmodels/old-plane.blkx").exists() == false,
+        !repo.data_root().join("gamedata/flightmodels/old-plane.blkx").exists(),
         "新数据根里不该留有旧文件"
     );
     // 单槽：上一版固定在 `resource/data_old`（只保留最近一份）

@@ -295,7 +295,7 @@ fn run(
                 st.vy = o.vy;
                 st.x = o.x;
                 st.y = o.y;
-                st.poi_enabled = if o.poi_enabled { 1 } else { 0 };
+                st.poi_enabled = u8::from(o.poi_enabled);
                 st.poi_x = o.poi_x;
                 st.poi_y = o.poi_y;
                 match client.send_state(st) {

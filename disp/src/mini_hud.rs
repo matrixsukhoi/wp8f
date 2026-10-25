@@ -52,7 +52,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         // Vertical throttle bar with number on left and underline below at fill level
         let throttle_x = start_x;
         debug_assert!(data.engine_count > 0);
-        let throttle = data.engine_throttle[0].max(0.0).min(110.0);
+        let throttle = data.engine_throttle[0].clamp(0.0, 110.0);
         let throttle_color = colors.data_u32();
         draw_throttle_vertical(
             buffer,
