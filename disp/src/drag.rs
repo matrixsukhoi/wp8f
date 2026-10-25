@@ -184,3 +184,77 @@ impl DragState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 面板 → 槽的映射：`Hud` 一格按 `hud_type` 落到 miniHUD 或圆环，两条路互不干扰。
+    /// （以前这个访问器读全局 `hud_type`：纯查询也得先把全局摆好。）
+    #[test]
+    fn panel_pos_routes_hud_panel_by_hud_type() {
+        let mut drag = DragState::from_config(&HudLayoutConfig::default());
+        drag.set_panel_pos(Panel::Hud, HudType::Mini, 11, 22);
+        drag.set_panel_pos(Panel::Hud, HudType::Circle, 33, 44);
+        assert_eq!(drag.panel_pos(Panel::Hud, HudType::Mini), (11, 22));
+        assert_eq!(drag.panel_pos(Panel::Hud, HudType::Circle), (33, 44), "两个槽各存各的");
+        assert_eq!(drag.slot_pos(Slot::MiniHud), (11, 22));
+        assert_eq!(drag.slot_pos(Slot::Circle), (33, 44));
+
+        // 其余面板与 hud_type 无关
+        drag.set_panel_pos(Panel::Map, HudType::Mini, 7, 8);
+        assert_eq!(drag.panel_pos(Panel::Map, HudType::Circle), (7, 8));
+    }
+
+    /// **miniHUD 与圆环的位置完全分离**：各自的配置键、各自的拖拽槽，
+    /// 拖一边不会动到另一边，写回配置时也只写自己那两个键。
+    /// （用户口径：两个 HUD 样式必须各用各的 x/y。）
+    #[test]
+    fn minihud_and_circle_positions_are_independent() {
+        let mut cfg = HudLayoutConfig::default();
+        cfg.minihud_x = 11;
+        cfg.minihud_y = 22;
+        cfg.circle_x = 33;
+        cfg.circle_y = 44;
+
+        // 起点：各自读自己的键
+        let mut drag = DragState::from_config(&cfg);
+        assert_eq!(drag.slot_pos(Slot::MiniHud), (11, 22));
+        assert_eq!(drag.slot_pos(Slot::Circle), (33, 44));
+
+        // 拖 miniHUD → 只动 mini 的槽
+        drag.set_panel_pos(Panel::Hud, HudType::Mini, 100, 200);
+        assert_eq!(drag.slot_pos(Slot::MiniHud), (100, 200));
+        assert_eq!(drag.slot_pos(Slot::Circle), (33, 44), "拖 mini 不该碰到圆环的位置");
+
+        // 拖圆环 → 只动圆环的槽
+        drag.set_panel_pos(Panel::Hud, HudType::Circle, 300, 400);
+        assert_eq!(drag.slot_pos(Slot::MiniHud), (100, 200), "拖圆环不该碰到 mini 的位置");
+        assert_eq!(drag.slot_pos(Slot::Circle), (300, 400));
+
+        // 写回配置：两边各写各的键
+        let mut out = HudLayoutConfig::default();
+        drag.apply_to(&mut out);
+        assert_eq!((out.minihud_x, out.minihud_y), (100, 200));
+        assert_eq!((out.circle_x, out.circle_y), (300, 400));
+
+        // 落点：mini 用 mini 的键、圆环用圆环的键（同一窗口尺寸下互不影响）
+        let win = (2560.0, 1440.0);
+        assert_eq!(crate::geometry::hud_anchor(HudType::Mini, out.minihud_x, out.minihud_y, &out, win), (100.0, 200.0));
+        assert_eq!(crate::geometry::hud_anchor(HudType::Circle, out.circle_x, out.circle_y, &out, win), (300.0, 400.0));
+    }
+
+    /// `from_config` 的地图 y 回退与绘制/命中用同一个公式（配了就用配置值）。
+    #[test]
+    fn drag_state_map_y_falls_back_to_geometry() {
+        let mut cfg = HudLayoutConfig::default();
+        cfg.map_y = 0;
+        let (_, map_h) = crate::geometry::map_panel_size(&cfg);
+        assert_eq!(
+            DragState::from_config(&cfg).slot_pos(Slot::Map).1,
+            crate::geometry::map_panel_default_y(&cfg, map_h) as i32
+        );
+        cfg.map_y = 123;
+        assert_eq!(DragState::from_config(&cfg).slot_pos(Slot::Map).1, 123);
+    }
+}

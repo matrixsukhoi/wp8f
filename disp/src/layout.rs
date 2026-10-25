@@ -134,3 +134,51 @@ pub fn save_drag_state(drag: &crate::DragState) {
         cfg.engine_info_x, cfg.engine_info_y, cfg.datalink_x, cfg.datalink_y,
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DragState, Panel};
+
+
+    /// **拖拽松手必须真的落盘**，而且只改位置键：盘上其它键（控制台改的语言/颜色…）要保住。
+    ///
+    /// 这条钉的是用户报的那个现象：拖完 mini → 切圆环 → 切回 mini，位置被复原。
+    /// 直接调 `save_drag_state`（松手/ESC/关窗都走它）再读回文件，不涉及窗口。
+    /// 注：`LAYOUT_CONFIG_PATH` 是 `OnceLock`，本 crate 只有这一个用例会 set 它。
+    #[test]
+    fn drag_release_persists_positions_and_keeps_other_keys() {
+        let dir = std::env::temp_dir().join(format!("wp8f-drag-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("layout.json");
+        let mut disk = HudLayoutConfig::default();
+        disk.minihud_x = 1180;
+        disk.minihud_y = 908;
+        disk.circle_x = 11;
+        disk.circle_y = 22;
+        disk.language = "ja".into(); // 假装控制台刚改过这个键
+        std::fs::write(&file, serde_json::to_string_pretty(&disk).unwrap()).unwrap();
+        crate::set_layout_config_path(file.display().to_string());
+
+        // 拖 mini 到 (100,200)：圆环坐标与 language 必须保持盘上那份
+        let mut drag = DragState::from_config(&disk);
+        drag.set_panel_pos(Panel::Hud, HudType::Mini, 100, 200);
+        crate::save_drag_state(&drag);
+
+        let after: HudLayoutConfig =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!((after.minihud_x, after.minihud_y), (100, 200), "拖拽结果必须落盘");
+        assert_eq!((after.circle_x, after.circle_y), (11, 22), "圆环的坐标不该被动到");
+        assert_eq!(after.language, "ja", "盘上其它键（控制台改的）必须保住");
+
+        // 再拖圆环：mini 的结果同样保住
+        let mut drag2 = DragState::from_config(&after);
+        drag2.set_panel_pos(Panel::Hud, HudType::Circle, 300, 400);
+        crate::save_drag_state(&drag2);
+        let after2: HudLayoutConfig =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!((after2.circle_x, after2.circle_y), (300, 400));
+        assert_eq!((after2.minihud_x, after2.minihud_y), (100, 200), "圆环的拖动不该把 mini 复原");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

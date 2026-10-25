@@ -239,3 +239,24 @@ pub struct MapObjectDisplay {
     pub distance: f64,
     pub is_player: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **记录端底图的回归守卫**：`set_map_image` 必须把"解码 RGB / 原始字节 / 像素尺寸"三份
+    /// **一起**写 —— 只写 RGB/尺寸时落盘的 `.wpr` 会 `img_len = 0`（回放没有底图）。
+    #[test]
+    fn map_image_publishes_rgb_raw_and_size_together() {
+        let rgb = Arc::new(vec![1u8, 2, 3]);
+        let raw = Arc::new(vec![0xFFu8, 0xD8, 0xFF, 0xE0]);
+        assert!(map_image().raw.is_empty(), "没写过时是空底图（不 panic）");
+
+        set_map_image(Arc::clone(&rgb), Arc::clone(&raw), 2048, 2048);
+        let got = map_image();
+        assert_eq!(&got.rgb[..], &rgb[..]);
+        assert_eq!(&got.raw[..], &raw[..], "原始字节是记录线程唯一要的东西，漏了就等于没底图");
+        assert_eq!((got.w, got.h), (2048, 2048));
+        assert_eq!((got.rgb.len(), got.raw.len()), (3, 4), "两份各自独立");
+    }
+}
