@@ -47,6 +47,13 @@ fn sample() -> DisplayData {
     d.engine_rpm[0] = 12500.0;
     d.engine_thrust[0] = 7200.0;
     d.aircraft_type.assign(b"f-16c");
+    // 渲染层文本：格式化在 compute 阶段（`core::display::updater::format_hud_text`）做好，
+    // 测试里要手工给上，否则量不到这些字符的墨迹。
+    d.hud_text.mini_mach.assign(b"M1.20");
+    d.hud_text.mini_aoa.assign("α 11".as_bytes());
+    d.hud_text.mini_radio_alt.assign(b"420R");
+    d.hud_text.mini_g.assign(b"7.5");
+    d.hud_text.throttle.assign(b"105");
     d
 }
 
@@ -56,6 +63,9 @@ fn map_with_poi() -> MapDisplay {
     m.nearest_poi_dist = 12345.0;
     m.nearest_poi_bearing = 90.0;
     m.nearest_poi_rel_speed = -123.0;
+    // 同 `sample()`：POI 文本也在 compute 阶段拼好（`format_poi_text`）
+    m.mini_poi_text.assign("→  12".as_bytes());
+    m.mini_poi_speed_text.assign(b" -123");
     m
 }
 

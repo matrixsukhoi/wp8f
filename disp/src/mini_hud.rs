@@ -67,6 +67,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             throttle_h,
             font_size,
             throttle,
+            data.hud_text.throttle.as_str(),
             throttle_color,
             colors.unit_u32(),
         );
@@ -91,8 +92,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         // Mach number: colored by its own MNE stage, shown near/over the Mach
         // limit or once it enters a warning stage.
         if data.mach >= 0.95 || data.mach_warning.is_active() {
-            let mut b = crate::FixedBytes::<8>::new();
-            let mach_text = b.write_fmt_str(format_args!("M{:.2}", data.mach));
+            let mach_text = data.hud_text.mini_mach.as_str();
             let mach_color = crate::hud_common::warning_level_color(data.mach_warning, colors.data_u32());
             draw_mini_text(
                 buffer,
@@ -132,9 +132,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             aoa_color,
             colors.unit_u32(),
         );
-        let aoa_val = data.aoa as i32;
-        let mut aoa_buf = crate::FixedBytes::<8>::new();
-        let aoa_text = aoa_buf.write_fmt_str(format_args!("α{:>3}", aoa_val));
+        let aoa_text = data.hud_text.mini_aoa.as_str();
         draw_mini_text(
             buffer,
             width,
@@ -156,7 +154,6 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 colors.data_u32()
             };
         if data.radio_altitude > 0.0 && data.radio_altitude <= 500.0 {
-            let mut radio_buf = crate::FixedBytes::<8>::new();
             draw_mini_info_line_right_align(
                 buffer,
                 width,
@@ -165,7 +162,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 alt_y,
                 " ",
-                radio_buf.write_fmt_str(format_args!("{:.0}R", data.radio_altitude)),
+                data.hud_text.mini_radio_alt.as_str(),
                 alt_color,
                 font_size,
             );
@@ -234,7 +231,6 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         if data.ny.abs() > 1.5 {
             // 过载统一告警逻辑：≥90% 允许过载时红色
             let g_color = crate::hud_common::g_warning_color(data.g_load_warning, colors.data_u32());
-            let mut g_buf = crate::FixedBytes::<8>::new();
             draw_mini_info_line_right_align(
                 buffer,
                 width,
@@ -243,7 +239,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 line4_y,
                 "G",
-                g_buf.write_fmt_str(format_args!("{:.1}", data.ny)),
+                data.hud_text.mini_g.as_str(),
                 g_color,
                 font_size,
             );
@@ -264,22 +260,10 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
 
         // POI distance on right side of G/T line, aligned with afterburner fuel time
         if map.nearest_poi_dist < f64::MAX {
-            let poi_dist = map.nearest_poi_dist / 1000.0;
-            let poi_bearing = map.nearest_poi_bearing;
-            let rel_bearing_adj = poi_bearing - 180.0;
-            let ahead = |b: f64| -> bool { b.abs() > 177.5 };
-            let (prefix, color) = if ahead(rel_bearing_adj) {
-                ("-", colors.poi_u32())
-            } else if rel_bearing_adj > 0.0 {
-                if poi_bearing > 355.0 { ("<", colors.poi_u32()) } else { ("←", colors.poi_u32()) }
-            } else {
-                if poi_bearing < 5.0 { (">", colors.poi_u32()) } else { ("→", colors.poi_u32()) }
-            };
-            let mut poi_buf = crate::FixedBytes::<16>::new();
-            let poi_text = poi_buf.write_fmt_str(format_args!("{:<2}{:>3.0}", prefix, poi_dist.round()));
+            // 箭头 + 距离、相对速度都在 compute 阶段拼好（mini 的箭头规则与圆环不同，那边各算一份）
+            let poi_text = map.mini_poi_text.as_str();
             let poi_text_w = measure_text_raw(font, poi_text, font_size);
-            let mut speed_buf = crate::FixedBytes::<8>::new();
-            let speed_text = speed_buf.write_fmt_str(format_args!(" {:+.0}", map.nearest_poi_rel_speed));
+            let speed_text = map.mini_poi_speed_text.as_str();
             let speed_text_w = measure_text_raw(font, speed_text, font_size * 0.75);
             // 这一段是往右长出去的：**夹在面板框内**（信息列右边界 = 锚点 + 面板宽），
             // 免得又画到擦除框外边去（框外的像素擦不掉，会在拖动后留残影）。
@@ -294,7 +278,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 poi_x,
                 line4_y,
                 poi_text,
-                color,
+                colors.poi_u32(),
                 font_size,
             );
             draw_mini_text(
@@ -364,12 +348,10 @@ fn draw_throttle_vertical(
     h: f32,
     font_size: f32,
     throttle: f64,
+    throttle_text: &str,
     throttle_color: u32,
     border_color: u32,
 ) {
-    let mut throttle_buf = crate::FixedBytes::<8>::new();
-    let throttle_text = throttle_buf.write_fmt_str(format_args!("{:.0}", throttle));
-
     let fill_ratio = (throttle / 110.0).clamp(0.0, 1.0) as f32;
 
     let bar_x = x as i32;

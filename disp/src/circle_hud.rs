@@ -137,14 +137,13 @@ fn draw_speed_aoa(
 
     // Row 0: altitude (above center, no label, font_sz)
     let row0_y = y - (font_sz + line_gap);
-    // 高度文本走栈上缓冲（每帧零分配；返回的 `&str` 借自 `alt_buf`）
-    let mut alt_buf = crate::FixedBytes::<8>::new();
+    // 文本由 compute 阶段算好（`core::display::updater::format_hud_text`），这里只挑用哪一份、给什么颜色
     let (alt_text, alt_color) = if data.radio_altitude > 0.0 && data.radio_altitude < 500.0 {
-        (alt_buf.write_fmt_str(format_args!("R {:>5.0}", data.radio_altitude)), colors.hint_u32())
+        (data.hud_text.circle_radio_alt.as_str(), colors.hint_u32())
     } else if data.altitude < 58.0 {
-        (alt_buf.write_fmt_str(format_args!("H {:>5.0}", data.altitude)), colors.alert_u32())
+        (data.hud_text.circle_alt.as_str(), colors.alert_u32())
     } else {
-        (alt_buf.write_fmt_str(format_args!("H {:>5.0}", data.altitude)), colors.data_u32())
+        (data.hud_text.circle_alt.as_str(), colors.data_u32())
     };
     draw_mt(buffer, width, height, font, x, row0_y, alt_text, alt_color, font_sz);
 
@@ -164,16 +163,12 @@ fn draw_speed_aoa(
         thr_w as i32, thr_h as i32,
         (throttle / 110.0) as f32, thr_color, colors.unit_u32(), false,
     );
-    let mut thr_buf = crate::FixedBytes::<8>::new();
-    draw_mt(buffer, width, height, font, x + thr_w + gap, row_t_y, thr_buf.write_fmt_str(format_args!("{:.0}", throttle)), thr_text_color, small_sz);
-
+    draw_mt(buffer, width, height, font, x + thr_w + gap, row_t_y, data.hud_text.throttle.as_str(), thr_text_color, small_sz);
     // Row 2: IAS number (font_sz) + Mach number (small_sz, no label) at 9 o'clock center
-    let mut ias_buf = crate::FixedBytes::<8>::new();
-    let ias_text = ias_buf.write_fmt_str(format_args!("{:>4}", data.ias as i32));
+    let ias_text = data.hud_text.circle_ias.as_str();
     let ias_vw = measure_text_raw(font, ias_text, font_sz);
     draw_mt(buffer, width, height, font, x, y, ias_text, ias_color, font_sz);
-    let mut mach_buf = crate::FixedBytes::<8>::new();
-    draw_mt(buffer, width, height, font, x + ias_vw + gap, y, mach_buf.write_fmt_str(format_args!("{:>5.2}", data.mach)), mach_color, small_sz);
+    draw_mt(buffer, width, height, font, x + ias_vw + gap, y, data.hud_text.circle_mach.as_str(), mach_color, small_sz);
 
     // Row 3: AoA bar + α (small_sz)
     let aoa_avail = data.max_aoa - data.aoa;
@@ -194,9 +189,8 @@ fn draw_speed_aoa(
         aoa_w as i32, aoa_h as i32,
         aoa_ratio, aoa_color, colors.unit_u32(), true,
     );
-    // 数值与标签一次写完（以前先 `format!("{:.1}")` 再 `format!("α {}")`，两次分配）
-    let mut aoa_buf = crate::FixedBytes::<12>::new();
-    draw_mt(buffer, width, height, font, x + aoa_w + gap, row2_y, aoa_buf.write_fmt_str(format_args!("α {:.1}", data.aoa)), aoa_color, small_sz);
+    // 数值与标签一起在 compute 阶段写好（`α 11.0`），这里直接落屏
+    draw_mt(buffer, width, height, font, x + aoa_w + gap, row2_y, data.hud_text.circle_aoa.as_str(), aoa_color, small_sz);
 
     // Row 4: status items (BRK, GEA, F, W)
     let row3_y = row2_y + font_sz + line_gap;
@@ -220,20 +214,19 @@ fn draw_sep_gload(
 
     // Row 0: E (small_sz), right-aligned above center (same y as altitude)
     let row0_y = y - (font_sz + line_gap);
-    let mut buf = crate::FixedBytes::<12>::new();
-    let e_text = buf.write_fmt_str(format_args!("E{:>9.0}", data.energy_height));
+    let e_text = data.hud_text.circle_energy.as_str();
     let tw = measure_text_raw(font, e_text, small_sz);
     draw_mt(buffer, width, height, font, x - tw, row0_y, e_text, colors.data_u32(), small_sz);
 
     // Row 1: SEP (font_sz), right-aligned at 9 o'clock center
-    let sep_text = buf.write_fmt_str(format_args!("SEP{:>+5.0}", data.sep as i32));
+    let sep_text = data.hud_text.circle_sep.as_str();
     let tw = measure_text_raw(font, sep_text, font_sz);
     draw_mt(buffer, width, height, font, x - tw, y, sep_text, sep_color, font_sz);
 
     // Row 2: G (font_sz), right-aligned below center (same y as AoA)
     // 过载统一告警逻辑：≥90% 允许过载时红色
     let g_color = crate::hud_common::g_warning_color(data.g_load_warning, colors.data_u32());
-    let g_text = buf.write_fmt_str(format_args!("G{:>+7.1}", data.ny));
+    let g_text = data.hud_text.circle_g.as_str();
     let tw = measure_text_raw(font, g_text, font_sz);
     draw_mt(buffer, width, height, font, x - tw, y + font_sz + line_gap, g_text, g_color, font_sz);
 }
@@ -244,8 +237,7 @@ fn draw_fuel(
     font_sz: f32, small_sz: f32, _line_gap: f32, outer_r: f32,
 ) {
     let (x, y) = clock_pos(cx, cy, 3.0, outer_r);
-    let mut buf = crate::FixedBytes::<12>::new();
-    let fuel_part = buf.write_fmt_str(format_args!("L {}", data.fuel_time_text.as_str()));
+    let fuel_part = data.hud_text.circle_fuel.as_str();
     let tw_part = data.thrust_to_weight_text.as_str(); // 只读，不再 to_string
     let fw = measure_text_raw(font, fuel_part, font_sz);
     let gap = font_sz * 0.5;
@@ -260,8 +252,7 @@ fn draw_heading_zone(
 ) {
     let (x, y) = clock_pos(cx, cy, clock, outer_r);
     let y = y + font_sz;
-    let mut buf = crate::FixedBytes::<12>::new();
-    let heading_text = buf.write_fmt_str(format_args!("{:>3.0}°", data.heading));
+    let heading_text = data.hud_text.circle_heading.as_str();
     let heading_w = measure_text_raw(font, heading_text, font_sz);
     draw_mt(buffer, width, height, font, x - heading_w / 2.0, y, heading_text, colors.data_u32(), font_sz);
     // 区域是 `FixedBytes`，直接借 `&str`（以前 `from_utf8_lossy` 每帧分配一次）
@@ -281,20 +272,9 @@ fn draw_poi(
     if map.nearest_poi_dist >= f64::MAX {
         return;
     }
-    let poi_dist = map.nearest_poi_dist / 1000.0;
-    let rel_bearing_adj = map.nearest_poi_bearing - 180.0;
-    // POI 文字用**警示色 hint_color**（原 poi_color 配置键已删除）
-    let (prefix, poi_ink) = if rel_bearing_adj.abs() > 177.5 {
-        ("-", colors.poi_u32())
-    } else if rel_bearing_adj > 0.0 {
-        ("←", colors.poi_u32())
-    } else {
-        ("→", colors.poi_u32())
-    };
-    let mut buf = crate::FixedBytes::<16>::new();
-    let poi_text = buf.write_fmt_str(format_args!("{:<2}{:>3.0}", prefix, poi_dist.round()));
-    let mut speed_buf = crate::FixedBytes::<8>::new();
-    let speed_text = speed_buf.write_fmt_str(format_args!("{:+.0}", map.nearest_poi_rel_speed));
+    // POI 文本（箭头 + 距离、相对速度）在 compute 阶段拼好（`format_poi_text`）；这里只落屏
+    let (poi_text, speed_text) = (map.poi_text.as_str(), map.poi_speed_text.as_str());
+    let poi_ink = colors.poi_u32();
     let poi_w = measure_text_raw(font, poi_text, font_sz);
     let speed_w = measure_text_raw(font, speed_text, small_sz);
     let gap = font_sz * 0.5;
