@@ -17,6 +17,9 @@ pub const HP_CONVERSION: f64 = 735.0;  // 推力(kgf) × G × tas(m/s) / 735 →
 
 pub const MAX_ENGINES: usize = 8;
 pub const MAX_FUEL_TANKS: usize = 8;
+/// 喷气/活塞判定的迟滞上限（**帧**）：计数器在 `±本值` 之间，只有正向证据才移动
+/// （见 `display/updater.rs::update_jet_signature`）。16384 帧 ≈ 9 分钟 @30 Hz ——
+/// 这个值很大是有意的：一次误判不该立刻翻面，而"没有证据"根本不移动计数器。
 pub const ENGINE_TYPE_COUNTER_MAX: i32 = 16384;
 
 pub const INFINITE_FUEL_TIME: f64 = 32768.0;

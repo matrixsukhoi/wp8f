@@ -1008,6 +1008,8 @@ pub struct DisplayData {
     pub engine_thrust: [f64; 8],
     pub engine_temp_water: [f64; 8],
     pub engine_temp_oil: [f64; 8],
+    /// 喷气机？（core 实时判定：有推力无功率 = 喷气；有功率 = 活塞；**没有证据时保持上一次判断**，
+    /// 所以地面关车不会把喷气翻成活塞。见 `core/src/display/updater.rs::update_jet_signature`）
     pub is_jet: bool,
     pub is_fm_valid: bool,
     pub engine_efficiency: f64,

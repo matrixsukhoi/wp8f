@@ -422,21 +422,35 @@ fn calculate_overheat(
     ctx.oil_remain_secs = remain_secs(&ctx.cur_oil_work_times, &ctx.engine_loads, cur_o_load);
 }
 
+/// 喷气/活塞的实时判定（每帧调用）。判据**只认正向证据**：
+///
+/// | 证据 | 条件 |
+/// |---|---|
+/// | 喷气 | 某台发动机 `power == 0`（喷气机不报功率）**且** `thrust > 0` |
+/// | 活塞 | 某台发动机 `power > 0`（活塞/涡桨都报功率；它们同时也报推力，所以推力不能单独当判据） |
+/// | 都没有 | 地面停车 / 关车时推力读到 0 —— **保持上一次判断**，计数器原地不动 |
+///
+/// ⚠️ 最后一行是这条判定的关键："没有喷气证据" **不等于** "有活塞证据"。旧实现逐帧递减
+/// 计数器（`ENGINE_TYPE_COUNTER_MAX = 16384` 帧 ≈ **9 分钟 @30 Hz**），于是喷气机在机场停久了
+/// 就会被判成活塞；更糟的是那时计数器已经趋近 `-16384`，重新开车后同样要 9 分钟才能翻回来
+/// （用户实测："在机场停太久，喷气飞机被当成活塞飞机"）。
+/// 现在没有证据就停手，两个方向都只有真凭据才动。
 fn update_jet_signature(
     state: &FlightState,
     ctx: &mut FlightContext,
     display_data: &mut DisplayData,
 ) {
-    let is_jet_signature = state
-        .engines
-        .iter()
-        .any(|e| e.power == 0.0 && e.thrust > 0.0);
+    const MAX: i32 = crate::constants::ENGINE_TYPE_COUNTER_MAX;
+    let engines = &state.engines[..state.engine_count];
+    let jet_evidence = engines.iter().any(|e| e.power == 0.0 && e.thrust > 0.0);
+    let piston_evidence = engines.iter().any(|e| e.power > 0.0);
 
-    ctx.engine_type_counter = if is_jet_signature {
-        (ctx.engine_type_counter + 1).min(crate::constants::ENGINE_TYPE_COUNTER_MAX)
-    } else {
-        (ctx.engine_type_counter - 1).max(-crate::constants::ENGINE_TYPE_COUNTER_MAX)
-    };
+    if jet_evidence && !piston_evidence {
+        ctx.engine_type_counter = (ctx.engine_type_counter + 1).min(MAX);
+    } else if piston_evidence && !jet_evidence {
+        ctx.engine_type_counter = (ctx.engine_type_counter - 1).max(-MAX);
+    }
+    // 证据打架（混合动力/数据毛刺）或压根没证据：都不动计数器，沿用上一次判断
 
     ctx.is_jet = ctx.engine_type_counter > 0;
     display_data.is_jet = ctx.is_jet;
@@ -1247,5 +1261,77 @@ mod tests {
             assert!(d.frame > last, "帧号必须递增（记录起点判据依赖它）：{last} → {}", d.frame);
             last = d.frame;
         }
+    }
+
+    /// 连喂 n 帧（同一份 state），返回推进后的帧号。
+    fn feed(
+        state: &FlightState,
+        ctx: &mut FlightContext,
+        d: &mut DisplayData,
+        from: u64,
+        n: u64,
+    ) -> u64 {
+        let indic = Indicators::default();
+        for i in 0..n {
+            update_display_from_state(state, &indic, d, ctx, &tick(from + i));
+        }
+        from + n
+    }
+
+    /// 一台发动机的 state（其余字段用默认值；更新器要求 `engine_count > 0`）。
+    fn one_engine(power: f64, thrust: f64) -> FlightState {
+        let mut s = FlightState::default();
+        s.engine_count = 1;
+        s.fuel0 = 3000.0;
+        s.fuel = 3000.0;
+        s.engines[0].power = power;
+        s.engines[0].thrust = thrust;
+        s
+    }
+
+    /// 喷气判定只认**正向证据**：地面关车（推力读到 0）时必须保持"喷气"，不能翻成活塞。
+    ///
+    /// 旧实现把"没有喷气证据"当成活塞证据逐帧递减（`ENGINE_TYPE_COUNTER_MAX = 16384` 帧
+    /// ≈ 9 分钟 @30 Hz），于是喷气机在机场停久了就被判成活塞 —— 这就是用户实测的那个 bug。
+    #[test]
+    fn jet_classification_holds_when_there_is_no_evidence() {
+        let mut ctx = FlightContext::new();
+        let mut d = DisplayData::default();
+
+        // ① 喷气：有推力、无功率 → 一帧确立
+        let jet = one_engine(0.0, 5000.0);
+        feed(&jet, &mut ctx, &mut d, 1, 1);
+        assert!(d.is_jet, "有推力无功率 → 喷气");
+        assert_eq!(ctx.engine_type_counter, 1);
+
+        // ② 落地关车：推力 0、功率 0（**没有任何证据**）→ 计数器不动、判断不翻
+        let parked = one_engine(0.0, 0.0);
+        feed(&parked, &mut ctx, &mut d, 2, 3000);
+        assert_eq!(ctx.engine_type_counter, 1, "没有证据时计数器必须原地不动");
+        assert!(d.is_jet, "关车 3000 帧（≈100 s @30 Hz）后仍然是喷气");
+
+        // ③ 真活塞证据（有功率）才让计数器往回走；证据消失后再次保持
+        let piston = one_engine(900.0, 500.0);
+        feed(&piston, &mut ctx, &mut d, 4000, 3);
+        assert_eq!(ctx.engine_type_counter, -2, "3 帧活塞证据 = 计数器 −3");
+        let held = ctx.engine_type_counter;
+        feed(&parked, &mut ctx, &mut d, 5000, 500);
+        assert_eq!(ctx.engine_type_counter, held, "证据消失 → 继续保持");
+
+        // ④ 再给喷气证据就原路返回（从 −2 起很快回到喷气）
+        feed(&jet, &mut ctx, &mut d, 6000, 3);
+        assert_eq!(ctx.engine_type_counter, 1);
+        assert!(d.is_jet, "重新开车 → 又是喷气");
+    }
+
+    /// 活塞机（有功率，同时也报推力）绝不能被当成喷气。
+    #[test]
+    fn piston_aircraft_is_not_mistaken_for_a_jet() {
+        let mut ctx = FlightContext::new();
+        let mut d = DisplayData::default();
+        let piston = one_engine(900.0, 500.0);
+        feed(&piston, &mut ctx, &mut d, 1, 30);
+        assert!(!d.is_jet, "有功率 = 活塞（推力不能单独当判据）");
+        assert!(ctx.engine_type_counter < 0);
     }
 }
