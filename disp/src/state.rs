@@ -246,6 +246,27 @@ pub struct DisplayData {
     pub manifold_pressure: f64,
     pub total_drag: f64,
     pub afterburner_fuel_time_text: FixedBytes<16>,
+    // —— 显示层格式化用的**原始数值** ——
+    // core 只算数值（`format_display_text` 会搬去 `disp`，文本在渲染线程生成）；
+    // 这几个量原先只存在 `core::display::FlightContext` 里，不发布的话显示层拿不到。
+    /// 本次进气的最大转速（RPM；`0` = 没有涡轮数据）
+    #[serde(default)]
+    pub max_rpm: f64,
+    /// 额定功率（Hp；喷气机为 0）
+    #[serde(default)]
+    pub rated_power: f64,
+    /// 是否英制单位（决定歧管压力单位的写法）
+    #[serde(default)]
+    pub is_imperial: bool,
+    /// 水冷"还能撑多久"（秒）
+    #[serde(default)]
+    pub water_remain_secs: f64,
+    /// 油冷"还能撑多久"（秒）
+    #[serde(default)]
+    pub oil_remain_secs: f64,
+    /// 本局已飞行秒数（`frame × 名义节拍`）
+    #[serde(default)]
+    pub elapsed_secs: f64,
     // —— logger 线程专用字段（HUD 渲染不读）——
     // 记录端只凭 `DisplayData` 重建帧，所以这里要有 ACMI 需要、其它字段导不出来的两项：
     // 单值油门与本机归一化地图坐标。

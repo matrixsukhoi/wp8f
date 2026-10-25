@@ -177,6 +177,11 @@ pub fn update_display_from_state(
     display_data.valid = 1;
     // 帧时间（UNIX **纳秒**）：飞行记录原样存进 `.wpr` 的时间列，与帧号同一拍
     display_data.timestamp = tick.timestamp_ns;
+    display_data.elapsed_secs = if tick.frame > 0 {
+        tick.frame as f64 * tick.nominal_interval_ns as f64 / NSEC_PER_SEC
+    } else {
+        0.0
+    };
 
     // 记录线程重建一行记录所需的字段（HUD 渲染不读）：单值油门 + 本机归一化地图坐标。
     // 油门口径兼容 0..1 与 0..100（原 main.rs 的 ACMI 拼装逻辑原样搬到这里，数值不变）；
@@ -340,6 +345,7 @@ fn update_flight_data(
         }
     }
     ctx.is_imperial = ctx.imperial_check_acc > 10;
+    display_data.is_imperial = ctx.is_imperial;
 }
 
 fn update_engine_display(state: &FlightState, indic: &Indicators, display_data: &mut DisplayData, ctx: &mut FlightContext) {
@@ -371,6 +377,7 @@ fn update_engine_display(state: &FlightState, indic: &Indicators, display_data: 
     ctx.total_thrust = thrust_sum;
     display_data.total_thrust = thrust_sum;
     ctx.current_max_rpm = max_rpm;
+    display_data.max_rpm = max_rpm;
 
     let tas_ms = tas_kmh_to_ms(state.tas);
     let total_hp_eff = thrust_sum * GRAVITY * tas_ms / HP_CONVERSION;
@@ -434,7 +441,7 @@ fn remain_secs(cur: &[f64], loads: &[EngineLoad], cur_load: usize) -> f64 {
 fn calculate_overheat(
     state: &FlightState,
     indic: &Indicators,
-    _display_data: &mut DisplayData,
+    display_data: &mut DisplayData,
     ctx: &mut FlightContext,
     interval_ns: u64,
 ) {
@@ -469,6 +476,8 @@ fn calculate_overheat(
 
     ctx.water_remain_secs = remain_secs(&ctx.cur_water_work_times, &ctx.engine_loads, cur_w_load);
     ctx.oil_remain_secs = remain_secs(&ctx.cur_oil_work_times, &ctx.engine_loads, cur_o_load);
+    display_data.water_remain_secs = ctx.water_remain_secs;
+    display_data.oil_remain_secs = ctx.oil_remain_secs;
 }
 
 /// 喷气/活塞的实时判定（每帧调用）。判据**只认正向证据**：
@@ -514,6 +523,7 @@ fn update_performance_metrics(
     display_data.energy_height = display_data.altitude + (tas_ms * tas_ms) / (2.0 * GRAVITY);
     let rated_power: f64 = display_data.engine_power[..display_data.engine_count].iter().sum();
     ctx.rated_power = rated_power;
+    display_data.rated_power = rated_power;
     // 效率 = 实功率 / 额定功率，上限 100%；喷气机没有"活塞功率效率"这个概念
     let efficiency = if ctx.is_jet {
         0.0
