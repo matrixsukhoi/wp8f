@@ -23,10 +23,6 @@ pub const MAX_FUEL_TANKS: usize = 8;
 pub const ENGINE_TYPE_COUNTER_MAX: i32 = 16384;
 
 pub const INFINITE_FUEL_TIME: f64 = 32768.0;
-pub const FUEL_TIME_ROUNDING: f64 = 10.0;
 pub const SMOOTHING_FACTOR_NEW: f64 = 0.01;
 pub const SMOOTHING_FACTOR_OLD: f64 = 0.99;
 
-pub const PSI_PER_ATM: f64 = 14.696;       // psi / atm（增压表）
-pub const MMHG_PER_ATM: f64 = 760.0;       // mmHg / atm
-pub const MM_PER_INCH: f64 = 25.4;         // mm / inch

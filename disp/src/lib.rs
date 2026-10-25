@@ -12,7 +12,7 @@ pub mod font;
 pub(crate) mod geometry;
 pub mod hud;
 pub mod hud_fmt;
-pub mod hud_text;
+pub mod hud_texts;
 mod hud_common;
 pub use hud_common::{map_zone_label, MapZone};
 pub mod i18n;
@@ -42,8 +42,7 @@ pub use config::{
 
 mod state;
 pub use state::{
-    map_image, set_map_image, DisplayData, HudText, MapDisplay, MapImage, MapObjectDisplay,
-    WarningStage,
+    map_image, set_map_image, DisplayData, MapDisplay, MapImage, MapObjectDisplay, WarningStage,
 };
 
 mod drag;

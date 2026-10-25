@@ -73,48 +73,6 @@ impl From<WarningStage> for u8 {
     }
 }
 
-/// **渲染层只读文本**：两个 HUD 要画的每个数字/标签，都在 compute 阶段的
-/// `core::display::updater::format_hud_text` 里一次算好，渲染器只 `as_str()` 落屏。
-///
-/// 为什么要单独一个结构体：`DisplayData` 里已经有一批**语义化**文本（`altitude_text`、
-/// `ias_text`…，面板原样印），这里是**按 HUD 版式**排好的文本（宽度、前后缀、取整位数），
-/// 两者混在一起看不出来谁给谁用；分开之后"渲染层不许格式化"这条规矩也能用 grep 守住。
-///
-/// 同源保证：文本与数值在同一帧、同一函数里写，不会出现"数值变了文本还是旧的"。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct HudText {
-    /// 圆环 HUD：高度 `H  1234`（没有雷达高度时用它）
-    pub circle_alt: FixedBytes<8>,
-    /// 圆环 HUD：雷达高度 `R   420`
-    pub circle_radio_alt: FixedBytes<8>,
-    /// 圆环 HUD：表速整数（右对齐 4 列）
-    pub circle_ias: FixedBytes<8>,
-    /// 圆环 HUD：马赫数（右对齐 5 列、两位小数）
-    pub circle_mach: FixedBytes<8>,
-    /// 圆环 HUD：攻角 `α 11.0`
-    pub circle_aoa: FixedBytes<12>,
-    /// 圆环 HUD：能量高度 `E      123`
-    pub circle_energy: FixedBytes<16>,
-    /// 圆环 HUD：SEP `SEP  +145`
-    pub circle_sep: FixedBytes<12>,
-    /// 圆环 HUD：过载 `G   +7.5`
-    pub circle_g: FixedBytes<12>,
-    /// 圆环 HUD：燃油时间 `L 23:45`
-    pub circle_fuel: FixedBytes<24>,
-    /// 圆环 HUD：航向 `  0°`
-    pub circle_heading: FixedBytes<8>,
-    /// miniHUD：马赫数 `M1.20`
-    pub mini_mach: FixedBytes<8>,
-    /// miniHUD：攻角 `α 11`（整数、右对齐 3 列）
-    pub mini_aoa: FixedBytes<8>,
-    /// miniHUD：雷达高度 `420R`
-    pub mini_radio_alt: FixedBytes<8>,
-    /// miniHUD：过载 `7.5`
-    pub mini_g: FixedBytes<8>,
-    /// 两个 HUD 共用：油门百分比（`engine_throttle[0]` 钳到 `0..=110` 后取整）
-    pub throttle: FixedBytes<8>,
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DisplayData {
     pub magic: u32,
@@ -169,7 +127,6 @@ pub struct DisplayData {
     pub thrust_percent: f64,
     pub sep: f64,
     pub energy_height: f64,
-    pub energy_height_text: FixedBytes<16>,
     pub turn_rate: f64,
     pub turn_radius: f64,
     /// 起落架边沿判定结果：false = 下降沿（正在收回）→ 起落架超速告警抑制
@@ -197,47 +154,6 @@ pub struct DisplayData {
     /// **表速 ≤ 64 km/h 时 core 把它压到 0**（地面滑跑不出声，见 `core::maneuver_tone::gate_by_ias`）。
     pub maneuver_margin: f64,
     pub aircraft_type: FixedBytes<64>,
-    pub altitude_text: FixedBytes<16>,
-    pub tas_text: FixedBytes<16>,
-    pub ias_text: FixedBytes<16>,
-    pub mach_text: FixedBytes<16>,
-    pub vy_text: FixedBytes<16>,
-    pub sep_text: FixedBytes<16>,
-    pub turn_rate_text: FixedBytes<16>,
-    pub turn_radius_text: FixedBytes<16>,
-    pub fuel_kg_text: FixedBytes<16>,
-    pub fuel_percent_text: FixedBytes<16>,
-    pub fuel_time_text: FixedBytes<16>,
-    pub fuel1_kg_text: FixedBytes<16>,
-    pub fuel1_time_text: FixedBytes<16>,
-    pub fuel_sfc_text: FixedBytes<16>,
-    pub fuel1_sfc_text: FixedBytes<16>,
-    pub elapsed_time_text: FixedBytes<16>,
-    pub engine_rpm_text: FixedBytes<16>,
-    pub engine_rpm_unit: FixedBytes<16>,
-    pub engine_temp_water_text: FixedBytes<16>,
-    pub engine_temp_oil_text: FixedBytes<16>,
-    pub manifold_pressure_text: FixedBytes<16>,
-    pub manifold_pressure_unit: FixedBytes<16>,
-    pub water_crit_temp_text: FixedBytes<16>,
-    pub oil_crit_temp_text: FixedBytes<16>,
-    pub vne_text: FixedBytes<16>,
-    pub mne_text: FixedBytes<16>,
-    pub thrust_to_weight_text: FixedBytes<16>,
-    pub total_thrust_text: FixedBytes<16>,
-    pub total_drag_text: FixedBytes<16>,
-    pub rated_power_text: FixedBytes<16>,
-    pub engine_power_text: FixedBytes<16>,
-    pub power_unit_text: FixedBytes<16>,
-    pub power_to_weight_text: FixedBytes<16>,
-    pub engine_throttle_text: FixedBytes<16>,
-    pub thrust_percent_text: FixedBytes<16>,
-    pub roll_rate_text: FixedBytes<16>,
-    pub pitch_text: FixedBytes<16>,
-    pub aoa_format_text: FixedBytes<16>,
-    pub g_load_text: FixedBytes<16>,
-    /// 当前重量下的允许正过载，显示在过载格单位栏（如 "/15.4"，风格同 VNE）
-    pub g_limit_text: FixedBytes<16>,
     /// 过载告警等级：`Normal` = 正常，`Caution` = |Ny| 达到允许过载的 90%（红色告警）。
     /// 判据单一来源 core::display::updater::g_load_warning_level，各 panel 统一消费。
     pub g_load_warning: WarningStage,
@@ -245,7 +161,6 @@ pub struct DisplayData {
     pub fuel1_sfc: f64,
     pub manifold_pressure: f64,
     pub total_drag: f64,
-    pub afterburner_fuel_time_text: FixedBytes<16>,
     // —— 显示层格式化用的**原始数值** ——
     // core 只算数值（`format_display_text` 会搬去 `disp`，文本在渲染线程生成）；
     // 这几个量原先只存在 `core::display::FlightContext` 里，不发布的话显示层拿不到。
@@ -267,6 +182,13 @@ pub struct DisplayData {
     /// 本局已飞行秒数（`frame × 名义节拍`）
     #[serde(default)]
     pub elapsed_secs: f64,
+    // —— 渲染层格式化需要的派生数值 ——
+    /// 当前重量下的**允许正过载**（过载格单位栏 `/15.4` 用）
+    #[serde(default)]
+    pub pos_limit: f64,
+    /// 发动机转速上限（RPM 单位栏 `/2850` 用；`f64::MAX` = 没有上限）
+    #[serde(default)]
+    pub rpm_max_allowed: f64,
     // —— logger 线程专用字段（HUD 渲染不读）——
     // 记录端只凭 `DisplayData` 重建帧，所以这里要有 ACMI 需要、其它字段导不出来的两项：
     // 单值油门与本机归一化地图坐标。
@@ -282,9 +204,6 @@ pub struct DisplayData {
     /// [`MAP_OBJ_INTERVAL_FRAME`] 个数据帧一次），首次记录之前是初值 `(0.5, 0.5)`。
     #[serde(default)]
     pub pos_y: f64,
-    /// **渲染层专用文本**（见 [`HudText`]）：compute 阶段算好，渲染器只 `as_str()` 落屏。
-    #[serde(default)]
-    pub hud_text: HudText,
 }
 
 /// 底图：**一局一份**（不是每采样一份）。解码 RGB / 原始字节 / 像素尺寸**三份必须一起写**：
@@ -334,9 +253,6 @@ pub struct MapDisplay {
     #[serde(default)]
     pub grid_steps: [f64; 2],
     pub map_objects: Vec<MapObjectDisplay>,
-    pub nearest_airfield_text: FixedBytes<64>,
-    pub nearest_bombing_point_text: FixedBytes<64>,
-    pub nearest_poi_text: FixedBytes<64>,
     pub nearest_poi_dist: f64,
     pub nearest_poi_bearing: f64,
     pub nearest_poi_rel_speed: f64,
@@ -346,18 +262,11 @@ pub struct MapDisplay {
     pub nearest_poi_x: f64,
     pub nearest_poi_y: f64,
     pub nearest_airfield_dist: f64,
+    /// 最近机场的方位角（度，0..360；渲染层拼 `AF …` 行用）
+    #[serde(default)]
+    pub nearest_airfield_bearing: f64,
     pub nearest_bombing_dist: f64,
     pub nearest_bombing_bearing: f64,
-    pub map_zone_text: FixedBytes<16>,
-    // —— 渲染层专用文本（POI 距离/箭头/相对速度）：compute 阶段填好，两个 HUD 只读 ——
-    /// 圆环 HUD 的 POI `{:<2}{:>3.0}`（箭头规则：正前 `-`、左 `←`、右 `→`）
-    pub poi_text: FixedBytes<16>,
-    /// miniHUD 的 POI `{:<2}{:>3.0}`（箭头规则比圆环多两档：`<`/`>` 贴近正前时用）
-    pub mini_poi_text: FixedBytes<16>,
-    /// 圆环 HUD 的 POI 相对速度 `{:+.0}`
-    pub poi_speed_text: FixedBytes<8>,
-    /// miniHUD 的 POI 相对速度 ` {:+.0}`（**前导空格是版式的一部分**）
-    pub mini_poi_speed_text: FixedBytes<8>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

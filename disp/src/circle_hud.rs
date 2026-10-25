@@ -51,7 +51,7 @@ fn draw_hbar(
     }
 }
 
-pub fn draw_circle_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayData, map: &MapDisplay, cx: f32, cy: f32) {
+pub fn draw_circle_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayData, texts: &crate::hud_texts::HudTexts, map: &MapDisplay, cx: f32, cy: f32) {
     let layout = crate::hud_layout();
     let circle_font_size = layout.circle_font_size;
     let circle_ring_radius = layout.circle_ring_radius;
@@ -71,11 +71,11 @@ pub fn draw_circle_hud(buffer: &mut [u32], width: usize, height: usize, data: &D
     FONT.with(|font| {
         let colors = &crate::HUD_COLORS;
         draw_attitude(buffer, width, height, cx, cy, data, circle_ring_radius, ring_color, arc_thick);
-        draw_speed_aoa(buffer, width, height, font, cx, cy, data, colors, circle_font_size, small_sz, line_gap, aoa_w, aoa_h, col_w, inner_r);
-        draw_sep_gload(buffer, width, height, font, cx, cy, data, colors, circle_font_size, small_sz, line_gap, col_w, outer_r);
-        draw_fuel(buffer, width, height, font, cx, cy, data, colors, circle_font_size, small_sz, line_gap, outer_r);
-        draw_heading_zone(buffer, width, height, font, cx, cy, data, map, colors, circle_font_size, small_sz, line_gap, outer_r, 6.0);
-        draw_poi(buffer, width, height, font, cx, cy, map, colors, circle_font_size, small_sz, line_gap, inner_r, 6.0);
+        draw_speed_aoa(buffer, width, height, font, cx, cy, data, &texts, colors, circle_font_size, small_sz, line_gap, aoa_w, aoa_h, col_w, inner_r);
+        draw_sep_gload(buffer, width, height, font, cx, cy, data, &texts, colors, circle_font_size, small_sz, line_gap, col_w, outer_r);
+        draw_fuel(buffer, width, height, font, cx, cy, data, &texts, colors, circle_font_size, small_sz, line_gap, outer_r);
+        draw_heading_zone(buffer, width, height, font, cx, cy, data, &texts, map, colors, circle_font_size, small_sz, line_gap, outer_r, 6.0);
+        draw_poi(buffer, width, height, font, cx, cy, map, colors, circle_font_size, small_sz, line_gap, inner_r, 6.0, &texts);
     });
 
     // Voice alarm overlay: flash a green X inscribed in the HUD ring at 4 Hz.
@@ -125,7 +125,7 @@ fn draw_attitude(
 
 fn draw_speed_aoa(
     buffer: &mut [u32], width: usize, height: usize, font: &ab_glyph::FontRef,
-    cx: f32, cy: f32, data: &DisplayData, colors: &crate::components::HudColors,
+    cx: f32, cy: f32, data: &DisplayData, texts: &crate::hud_texts::HudTexts, colors: &crate::components::HudColors,
     font_sz: f32, small_sz: f32, line_gap: f32, aoa_w: f32, aoa_h: f32, _col_w: f32, inner_r: f32,
 ) {
     let (x, y) = clock_pos(cx, cy, 9.0, inner_r);
@@ -139,11 +139,11 @@ fn draw_speed_aoa(
     let row0_y = y - (font_sz + line_gap);
     // 文本由 compute 阶段算好（`core::display::updater::format_hud_text`），这里只挑用哪一份、给什么颜色
     let (alt_text, alt_color) = if data.radio_altitude > 0.0 && data.radio_altitude < 500.0 {
-        (data.hud_text.circle_radio_alt.as_str(), colors.hint_u32())
+        (texts.circle_radio_alt.as_str(), colors.hint_u32())
     } else if data.altitude < 58.0 {
-        (data.hud_text.circle_alt.as_str(), colors.alert_u32())
+        (texts.circle_alt.as_str(), colors.alert_u32())
     } else {
-        (data.hud_text.circle_alt.as_str(), colors.data_u32())
+        (texts.circle_alt.as_str(), colors.data_u32())
     };
     draw_mt(buffer, width, height, font, x, row0_y, alt_text, alt_color, font_sz);
 
@@ -163,12 +163,12 @@ fn draw_speed_aoa(
         thr_w as i32, thr_h as i32,
         (throttle / 110.0) as f32, thr_color, colors.unit_u32(), false,
     );
-    draw_mt(buffer, width, height, font, x + thr_w + gap, row_t_y, data.hud_text.throttle.as_str(), thr_text_color, small_sz);
+    draw_mt(buffer, width, height, font, x + thr_w + gap, row_t_y, texts.throttle.as_str(), thr_text_color, small_sz);
     // Row 2: IAS number (font_sz) + Mach number (small_sz, no label) at 9 o'clock center
-    let ias_text = data.hud_text.circle_ias.as_str();
+    let ias_text = texts.circle_ias.as_str();
     let ias_vw = measure_text_raw(font, ias_text, font_sz);
     draw_mt(buffer, width, height, font, x, y, ias_text, ias_color, font_sz);
-    draw_mt(buffer, width, height, font, x + ias_vw + gap, y, data.hud_text.circle_mach.as_str(), mach_color, small_sz);
+    draw_mt(buffer, width, height, font, x + ias_vw + gap, y, texts.circle_mach.as_str(), mach_color, small_sz);
 
     // Row 3: AoA bar + α (small_sz)
     let aoa_avail = data.max_aoa - data.aoa;
@@ -190,7 +190,7 @@ fn draw_speed_aoa(
         aoa_ratio, aoa_color, colors.unit_u32(), true,
     );
     // 数值与标签一起在 compute 阶段写好（`α 11.0`），这里直接落屏
-    draw_mt(buffer, width, height, font, x + aoa_w + gap, row2_y, data.hud_text.circle_aoa.as_str(), aoa_color, small_sz);
+    draw_mt(buffer, width, height, font, x + aoa_w + gap, row2_y, texts.circle_aoa.as_str(), aoa_color, small_sz);
 
     // Row 4: status items (BRK, GEA, F, W)
     let row3_y = row2_y + font_sz + line_gap;
@@ -202,7 +202,7 @@ fn draw_speed_aoa(
 
 fn draw_sep_gload(
     buffer: &mut [u32], width: usize, height: usize, font: &ab_glyph::FontRef,
-    cx: f32, cy: f32, data: &DisplayData, colors: &crate::components::HudColors,
+    cx: f32, cy: f32, data: &DisplayData, texts: &crate::hud_texts::HudTexts, colors: &crate::components::HudColors,
     font_sz: f32, small_sz: f32, line_gap: f32, _col_w: f32, outer_r: f32,
 ) {
     let (x, y) = clock_pos(cx, cy, 9.0, outer_r);
@@ -214,31 +214,31 @@ fn draw_sep_gload(
 
     // Row 0: E (small_sz), right-aligned above center (same y as altitude)
     let row0_y = y - (font_sz + line_gap);
-    let e_text = data.hud_text.circle_energy.as_str();
+    let e_text = texts.circle_energy.as_str();
     let tw = measure_text_raw(font, e_text, small_sz);
     draw_mt(buffer, width, height, font, x - tw, row0_y, e_text, colors.data_u32(), small_sz);
 
     // Row 1: SEP (font_sz), right-aligned at 9 o'clock center
-    let sep_text = data.hud_text.circle_sep.as_str();
+    let sep_text = texts.circle_sep.as_str();
     let tw = measure_text_raw(font, sep_text, font_sz);
     draw_mt(buffer, width, height, font, x - tw, y, sep_text, sep_color, font_sz);
 
     // Row 2: G (font_sz), right-aligned below center (same y as AoA)
     // 过载统一告警逻辑：≥90% 允许过载时红色
     let g_color = crate::hud_common::g_warning_color(data.g_load_warning, colors.data_u32());
-    let g_text = data.hud_text.circle_g.as_str();
+    let g_text = texts.circle_g.as_str();
     let tw = measure_text_raw(font, g_text, font_sz);
     draw_mt(buffer, width, height, font, x - tw, y + font_sz + line_gap, g_text, g_color, font_sz);
 }
 
 fn draw_fuel(
     buffer: &mut [u32], width: usize, height: usize, font: &ab_glyph::FontRef,
-    cx: f32, cy: f32, data: &DisplayData, colors: &crate::components::HudColors,
+    cx: f32, cy: f32, _data: &DisplayData, texts: &crate::hud_texts::HudTexts, colors: &crate::components::HudColors,
     font_sz: f32, small_sz: f32, _line_gap: f32, outer_r: f32,
 ) {
     let (x, y) = clock_pos(cx, cy, 3.0, outer_r);
-    let fuel_part = data.hud_text.circle_fuel.as_str();
-    let tw_part = data.thrust_to_weight_text.as_str(); // 只读，不再 to_string
+    let fuel_part = texts.circle_fuel.as_str();
+    let tw_part = texts.thrust_to_weight_text.as_str(); // 只读，不再 to_string
     let fw = measure_text_raw(font, fuel_part, font_sz);
     let gap = font_sz * 0.5;
     draw_mt(buffer, width, height, font, x, y, fuel_part, colors.data_u32(), font_sz);
@@ -247,16 +247,16 @@ fn draw_fuel(
 
 fn draw_heading_zone(
     buffer: &mut [u32], width: usize, height: usize, font: &ab_glyph::FontRef,
-    cx: f32, cy: f32, data: &DisplayData, map: &MapDisplay, colors: &crate::components::HudColors,
+    cx: f32, cy: f32, __data: &DisplayData, texts: &crate::hud_texts::HudTexts, _map: &MapDisplay, colors: &crate::components::HudColors,
     font_sz: f32, _small_sz: f32, _line_gap: f32, outer_r: f32, clock: f32,
 ) {
     let (x, y) = clock_pos(cx, cy, clock, outer_r);
     let y = y + font_sz;
-    let heading_text = data.hud_text.circle_heading.as_str();
+    let heading_text = texts.circle_heading.as_str();
     let heading_w = measure_text_raw(font, heading_text, font_sz);
     draw_mt(buffer, width, height, font, x - heading_w / 2.0, y, heading_text, colors.data_u32(), font_sz);
     // 区域是 `FixedBytes`，直接借 `&str`（以前 `from_utf8_lossy` 每帧分配一次）
-    let zone = map.map_zone_text.as_str();
+    let zone = texts.map_zone_text.as_str();
     if !zone.trim().is_empty() {
         let gap = font_sz * 0.5;
         draw_mt(buffer, width, height, font, x - heading_w / 2.0 + heading_w + gap, y, zone, colors.hint_u32(), font_sz);
@@ -267,13 +267,13 @@ fn draw_poi(
     buffer: &mut [u32], width: usize, height: usize, font: &ab_glyph::FontRef,
     cx: f32, cy: f32, map: &MapDisplay, colors: &crate::components::HudColors,
     font_sz: f32, small_sz: f32, _line_gap: f32, radius: f32, clock: f32,
-) {
+ texts: &crate::hud_texts::HudTexts, ) {
     let (x, y) = clock_pos(cx, cy, clock, radius);
     if map.nearest_poi_dist >= f64::MAX {
         return;
     }
     // POI 文本（箭头 + 距离、相对速度）在 compute 阶段拼好（`format_poi_text`）；这里只落屏
-    let (poi_text, speed_text) = (map.poi_text.as_str(), map.poi_speed_text.as_str());
+    let (poi_text, speed_text) = (texts.poi_text.as_str(), texts.poi_speed_text.as_str());
     let poi_ink = colors.poi_u32();
     let poi_w = measure_text_raw(font, poi_text, font_sz);
     let speed_w = measure_text_raw(font, speed_text, small_sz);

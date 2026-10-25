@@ -405,11 +405,11 @@ fn draw_map_info_text(
     _map_h: usize,
     data_color: u32,
     font_size: f32,
-) {
+ texts: &crate::hud_texts::HudTexts, ) {
     let loc_text = format!("Zone {} {:.0}°",
-        String::from_utf8_lossy(map.map_zone_text.as_bytes()), heading);
-    let airfield_text = String::from_utf8_lossy(map.nearest_airfield_text.as_bytes());
-    let poi_info_text = String::from_utf8_lossy(map.nearest_poi_text.as_bytes());
+        String::from_utf8_lossy(texts.map_zone_text.as_bytes()), heading);
+    let airfield_text = String::from_utf8_lossy(texts.nearest_airfield_text.as_bytes());
+    let poi_info_text = String::from_utf8_lossy(texts.nearest_poi_text.as_bytes());
 
     let poi_line = if map.nearest_poi_neighbor_dist < f64::MAX {
         format!("{} / {:.0}m", poi_info_text, map.nearest_poi_neighbor_dist)
@@ -450,7 +450,7 @@ pub fn draw_map_panel(
     buf_height: usize,
     map: &MapDisplay,
     img: &crate::MapImage,
-    data: &DisplayData,
+    data: &DisplayData, texts: &crate::hud_texts::HudTexts,
     link_tracks: &[datalink::StatePacket],
     map_x: usize,
     map_y: usize,
@@ -534,7 +534,7 @@ pub fn draw_map_panel(
     draw_datalink_tracks(buffer, buf_width, buf_height, link_tracks, player_x, player_y, map_x, map_y, map_w, map_h);
 
     draw_range_rings(buffer, buf_width, buf_height, map, map_x, map_y, map_w, map_h, map_font_size, ring_color_base);
-    draw_map_info_text(buffer, buf_width, buf_height, map, data.heading, map_x, map_y, map_w, map_h, data_color, map_font_size);
+    draw_map_info_text(buffer, buf_width, buf_height, map, data.heading, map_x, map_y, map_w, map_h, data_color, map_font_size, &texts);
 }
 
 /// Link-8 友军：与地图对象同一投影公式（地图以玩家为中心），

@@ -1,5 +1,5 @@
 use crate::math::angle::{
-    angle_difference_deg, compass_deg, normalize_angle_deg, parse_hex_color, round_sep,
+    angle_difference_deg, compass_deg, normalize_angle_deg, parse_hex_color,
     target_bearing_deg,
 };
 use crate::math::average::SimpleMovingAverage;
@@ -8,73 +8,17 @@ use crate::math::map::{
 };
 use crate::context::FlightContext;
 use crate::frame_clock::Tick;
-use crate::fmt::time::write_duration;
-use crate::fmt::value::{write_adaptive, write_sig_figs};
 use crate::parser::{FlightState, Indicators, MapObjData};
 use crate::constants::{
-    FEET_TO_METERS, FUEL_TIME_ROUNDING, GRAVITY, HP_CONVERSION,
+    FEET_TO_METERS, GRAVITY, HP_CONVERSION,
     INFINITE_FUEL_TIME, MS_TO_KMH, SEC_PER_HOUR,
     SMOOTHING_FACTOR_NEW, SMOOTHING_FACTOR_OLD, NSEC_PER_SEC,
 };
 use crate::DisplayData;
-use wp8f_disp::FixedBytes;
 use wp8f_disp::MapDisplay;
 use wp8f_disp::MapObjectDisplay;
 use wp8f_disp::WarningStage;
 use wp8f_flightmodel::EngineLoad;
-
-fn set_text<const N: usize>(field: &mut FixedBytes<N>, args: std::fmt::Arguments<'_>) {
-    field.clear();
-    use std::fmt::Write;
-    let _ = write!(field, "{}", args);
-}
-
-fn set_text_str<const N: usize>(field: &mut FixedBytes<N>, text: &str) {
-    field.assign(text.as_bytes());
-}
-
-/// 格式化段里**最高频的模式**：有值就按格式写数字，没值就写占位符（`-` / `0` / `---`）。
-///
-/// 以前每个字段都是五行 `if cond { set_text(...) } else { set_text_str(field, "-") }`，
-/// 占位符散在十几个分支里 —— 一行写法把"条件/占位符/格式"摆在调用点上：
-/// `text_or!(字段, 条件, "占位符", "格式", 参数…)`。
-macro_rules! text_or {
-    ($field:expr, $cond:expr, $placeholder:literal, $fmt:literal $(, $arg:expr)*) => {
-        if $cond {
-            set_text($field, format_args!($fmt $(, $arg)*));
-        } else {
-            set_text_str($field, $placeholder);
-        }
-    };
-}
-
-fn set_time_or_dash<const N: usize>(field: &mut FixedBytes<N>, time_val: f64, min: f64, max: f64) {
-    if time_val > min && time_val < max {
-        let secs = (time_val / FUEL_TIME_ROUNDING).round() * FUEL_TIME_ROUNDING;
-        set_duration(field, secs);
-    } else {
-        set_text_str(field, "-");
-    }
-}
-
-/// 零分配写字段：`write_*` 直接写进定长缓冲。
-///
-/// 以前是 `set_text_str(field, &format_sig_figs(..))` —— 每帧为每个这样的字段现分配一个
-/// `String`，只为拷 4-6 个字节进 `FixedBytes`。下面三个小包装就是这两步的合体。
-fn set_sig<const N: usize>(field: &mut FixedBytes<N>, value: f64, sigfigs: usize) {
-    field.clear();
-    let _ = write_sig_figs(field, value, sigfigs);
-}
-
-fn set_adaptive<const N: usize>(field: &mut FixedBytes<N>, value: f64, base_decimals: i32) {
-    field.clear();
-    let _ = write_adaptive(field, value, base_decimals);
-}
-
-fn set_duration<const N: usize>(field: &mut FixedBytes<N>, total_secs: f64) {
-    field.clear();
-    let _ = write_duration(field, total_secs);
-}
 
 /// 安全比值：分母缺失（≤0）→ 0（"该向不参与"的统一口径，省掉每处 if/else）。
 fn ratio(value: f64, limit: f64) -> f64 {
@@ -89,27 +33,6 @@ fn ratio(value: f64, limit: f64) -> f64 {
 fn percent(part: f64, whole: f64) -> f64 {
     ratio(part, whole) * 100.0
 }
-
-fn write_manifold_pressure_value<const N: usize>(field: &mut FixedBytes<N>, manifold_atm: f64, imperial: bool) {
-    field.clear();
-    use std::fmt::Write;
-    if imperial {
-        let _ = write!(field, "{:+.1}", (manifold_atm - 1.0) * crate::constants::PSI_PER_ATM);
-    } else {
-        let _ = write!(field, "{:.2}", manifold_atm);
-    }
-}
-
-fn write_manifold_pressure_unit<const N: usize>(field: &mut FixedBytes<N>, manifold_atm: f64, imperial: bool) {
-    field.clear();
-    use std::fmt::Write;
-    if imperial {
-        let _ = write!(field, "P/{:.0}''", manifold_atm * crate::constants::MMHG_PER_ATM / crate::constants::MM_PER_INCH);
-    } else {
-        set_text_str(field, "Ata");
-    }
-}
-
 #[inline]
 fn tas_kmh_to_ms(tas_kmh: f64) -> f64 {
     tas_kmh / MS_TO_KMH
@@ -195,9 +118,8 @@ pub fn update_display_from_state(
     display_data.pos_y = ctx.player_map_pos.1;
 
     // Phase 2: 格式化（读 → 算 → 格式化 三段里的第三段，全部在这一步做完）
-    format_display_text(display_data, ctx, tick);
+    compute_alerts(display_data, ctx);
     // 渲染层文本由显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
-    wp8f_disp::hud_fmt::format_display(display_data);
 }
 
 /// 过载告警阈值：|Ny| 达到允许过载的该比例即告警（语音 + 红色，各 panel 统一）
@@ -321,17 +243,6 @@ fn update_flight_data(
     display_data.min_aoa = ctx.flight_model().aerodynamics.get_aoa_min(flaps, wing_sweep);
     display_data.vne = ctx.flight_model().aerodynamics.get_vne(wing_sweep);
     display_data.vne_mach = ctx.flight_model().aerodynamics.wing_geometry.get_vne_mach(wing_sweep);
-    if display_data.vne > 0.0 {
-        set_text(&mut display_data.vne_text, format_args!("/{:.0}", display_data.vne));
-    } else {
-        display_data.vne_text.clear();
-    }
-    if display_data.vne_mach > 0.0 {
-        set_text(&mut display_data.mne_text, format_args!("/{:.2}", display_data.vne_mach));
-    } else {
-        display_data.mne_text.clear();
-    }
-
     // Two-stage overspeed warnings (shared by miniHUD / circle HUD / flight panel):
     // stage 1 (yellow) at the warning line, stage 2 (red) 2.5 points above it.
     display_data.overspeed_warning = warning_stage(display_data.ias, display_data.vne);
@@ -785,7 +696,7 @@ pub fn update_map_display(map: &mut MapDisplay, ctx: &mut FlightContext, dt_ns: 
     let player = populate_map_objects(map, ctx, &map_obj);
     let sample = MapSample { map_obj: &map_obj, maxsize: (map_maxsize[0], map_maxsize[1]), player };
 
-    let nearest_airfield_bearing = update_map_nearest_targets(map, &sample, ctx, dt_ns);
+    update_map_nearest_targets(map, &sample, ctx, dt_ns);
     ctx.map_obj = map_obj;
 
     ctx.player_dx = player.dx;
@@ -794,9 +705,6 @@ pub fn update_map_display(map: &mut MapDisplay, ctx: &mut FlightContext, dt_ns: 
     // 每帧写进 DisplayData.pos_x/pos_y（与上面写进 map.player_map_x/y 的是同一对值）
     ctx.player_map_pos = (player.x, player.y);
 
-    if let Some(ref map_info) = ctx.map_info {
-        format_map_text(map, map_info, nearest_airfield_bearing, player.x, player.y);
-    }
 }
 
 fn populate_map_objects(
@@ -863,22 +771,6 @@ fn populate_map_objects(
     }
 
     PlayerXy { x: player_x, y: player_y, dx: player_dx, dy: player_dy }
-}
-
-fn write_format_dist<const N: usize>(field: &mut FixedBytes<N>, prefix: &str, dist: f64, bearing: f64) {
-    field.clear();
-    use std::fmt::Write;
-    // 可读性优先：距离 / 方位角用 " / " 分隔（例 "POI 17.5km / 172°"），
-    // 偏移距离由地图面板追加成 "POI 17.5km / 172° / 63m"。
-    if dist < f64::MAX {
-        if dist < 1000.0 {
-            let _ = write!(field, "{} {:.0}m / {:03.0}°", prefix, dist, bearing);
-        } else {
-            let _ = write!(field, "{} {:.1}km / {:03.0}°", prefix, dist / 1000.0, bearing);
-        }
-    } else {
-        let _ = write!(field, "{} -", prefix);
-    }
 }
 
 fn update_map_nearest_targets(
@@ -951,6 +843,7 @@ fn update_map_nearest_targets(
     let (nearest_poi_dist, nearest_poi_bearing) = best_poi.unwrap_or((f64::MAX, 0.0));
 
     map.nearest_airfield_dist = nearest_airfield_dist;
+    map.nearest_airfield_bearing = nearest_airfield_bearing;
     map.nearest_bombing_dist = nearest_bombing_dist;
     map.nearest_bombing_bearing = nearest_bombing_bearing;
     map.nearest_poi_dist = nearest_poi_dist;
@@ -980,102 +873,19 @@ fn update_map_nearest_targets(
     nearest_airfield_bearing
 }
 
-fn format_map_text(map: &mut MapDisplay, map_info: &crate::parser::MapInfo, nearest_airfield_bearing: f64, player_x: f64, player_y: f64) {
-    write_format_dist(&mut map.nearest_airfield_text, "AF", map.nearest_airfield_dist, nearest_airfield_bearing);
-    write_format_dist(&mut map.nearest_bombing_point_text, "BP", map.nearest_bombing_dist, map.nearest_bombing_bearing);
-    write_format_dist(&mut map.nearest_poi_text, "POI", map.nearest_poi_dist, map.nearest_poi_bearing);
-    set_text_str(
-        &mut map.map_zone_text,
-        crate::math::map::calc_map_zone(player_x, player_y, map_info).as_str(),
-    );
-    // 渲染层文本归显示层自己算（`disp::hud_text`）：core 只提供数值，格式一行都不在这。
-    wp8f_disp::hud_fmt::format_map(map);
-}
-
-fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick: &Tick) {
-    let eh = display_data.energy_height;
-    // `eh == 0`（或 NaN）时 `log10()` = -inf，`as i32` 饱和成 `i32::MIN`，`2 - MIN` 在 debug 下
-    // 整数下溢直接 panic（release 静默回绕 → 打出 "E 0" / "E inf"）。能量高度为 0 只在
-    // 退化输入下出现，但格式化没必要为此炸掉整个更新器。
-    let eh_decade = if eh.is_finite() && eh.abs() > f64::MIN_POSITIVE {
-        eh.abs().log10().floor() as i32
-    } else {
-        0
-    };
-    let eh_scale = 10.0_f64.powi(2 - eh_decade);
-    let eh_rounded = (eh * eh_scale).round() / eh_scale;
-    let eh_prec = (2 - eh_decade).max(0) as usize;
-    set_text(&mut display_data.energy_height_text, format_args!("E {:.eh_prec$}", eh_rounded, eh_prec = eh_prec));
-    set_text(&mut display_data.altitude_text, format_args!("{:.0}", display_data.altitude));
-    set_text(&mut display_data.tas_text, format_args!("{:.0}", display_data.tas));
-    set_text(&mut display_data.ias_text, format_args!("{:.0}", display_data.ias));
-    set_text(&mut display_data.mach_text, format_args!("{:.2}", display_data.mach));
-    set_text(&mut display_data.vy_text, format_args!("{:+.1}", display_data.vy));
-    set_text(&mut display_data.sep_text, format_args!("{:+.0}", round_sep(display_data.sep)));
-    text_or!(&mut display_data.turn_rate_text, display_data.turn_rate < 999.0, "---", "{:.1}", display_data.turn_rate);
-    text_or!(&mut display_data.turn_radius_text, display_data.turn_radius < 99999.0, "-", "{:.0}", display_data.turn_radius);
-    set_text(&mut display_data.fuel_kg_text, format_args!("{:.0}", display_data.fuel_kg));
-    set_text(&mut display_data.fuel_percent_text, format_args!("{:.0}", display_data.fuel_percent));
-    set_time_or_dash(&mut display_data.fuel_time_text, display_data.fuel_time, 0.0, INFINITE_FUEL_TIME);
-    text_or!(&mut display_data.fuel1_kg_text, display_data.has_fuel1, "-", "{:.0}", display_data.fuel1_kg);
-    set_time_or_dash(&mut display_data.fuel1_time_text, display_data.fuel1_time, 0.0, INFINITE_FUEL_TIME);
-
-    // SFC text（小数位数按量级自适应；非正值由 `write_adaptive` 自己写 "-"）
-    set_adaptive(&mut display_data.fuel_sfc_text, display_data.fuel_sfc, 3);
-    set_adaptive(&mut display_data.fuel1_sfc_text, display_data.fuel1_sfc, 3);
-
-    // 飞行时长 = 帧数 × 标称节拍（`refresh_hz`），不用每帧实测的 interval（会累积抖动）
-    let elapsed_secs = if tick.frame > 0 {
-        tick.frame as f64 * tick.nominal_interval_ns as f64 / NSEC_PER_SEC
-    } else {
-        0.0
-    };
-    set_duration(&mut display_data.elapsed_time_text, elapsed_secs);
-
-    text_or!(&mut display_data.engine_rpm_text, ctx.current_max_rpm > 0.0, "0", "{:.0}", ctx.current_max_rpm);
-    set_sig(&mut display_data.engine_power_text, display_data.total_hp, 3);
-    let eff = display_data.engine_efficiency as i32;
-    if eff > 0 && !ctx.is_jet {
-        set_text(&mut display_data.power_unit_text, format_args!("Hp/{}%", eff));
-    } else {
-        display_data.power_unit_text.clear();
-    }
+/// 告警与机动参数的**计算**（纯数值；文本由 `disp::hud_fmt` 在渲染线程生成）。
+///
+/// 这段原本在 `format_display_text` 的后半段：过载限值、过载告警、机动告警参数都依赖飞行模型
+/// 的重量/限值，属于"计算"而不是"格式化"，所以留在 core。
+fn compute_alerts(display_data: &mut DisplayData, ctx: &FlightContext) {
     let fm = ctx.flight_model();
-    if fm.rpm_max_allowed < f64::MAX {
-        set_text(&mut display_data.engine_rpm_unit, format_args!("/{}", fm.rpm_max_allowed as u32));
-    } else {
-        display_data.engine_rpm_unit.clear();
-    }
-    let rated_power = if !fm.is_jet { ctx.rated_power } else { 0.0 };
-    text_or!(&mut display_data.rated_power_text, rated_power > 0.0, "-", "{:.0}", rated_power);
-    set_text(&mut display_data.thrust_to_weight_text, format_args!("{:.2}", display_data.thrust_to_weight));
-    set_text(&mut display_data.power_to_weight_text, format_args!("{:.2}", display_data.power_to_weight));
-    text_or!(&mut display_data.engine_throttle_text, display_data.engine_count > 0, "0",
-             "{:.0}", display_data.engine_throttle[0]);
-    debug_assert!(display_data.engine_count > 0);
-    text_or!(&mut display_data.engine_temp_water_text, display_data.engine_temp_water[0] > 0.0, "-",
-             "{:.0}", display_data.engine_temp_water[0]);
-    text_or!(&mut display_data.engine_temp_oil_text, display_data.engine_temp_oil[0] > 0.0, "-",
-             "{:.0}", display_data.engine_temp_oil[0]);
-    set_sig(&mut display_data.total_thrust_text, display_data.total_thrust, 3);
-    set_text(&mut display_data.thrust_percent_text, format_args!("{:.0}", display_data.thrust_percent));
-    set_text(&mut display_data.roll_rate_text, format_args!("{:>+4.1}", display_data.wx));
-    set_text(&mut display_data.pitch_text, format_args!("{:>+4.1}", -display_data.pitch));
-    set_text(&mut display_data.aoa_format_text, format_args!("{:>+4.1}", display_data.aoa));
-    set_text(&mut display_data.g_load_text, format_args!("{:>+4.1}", display_data.ny));
-
-    // 过载单位栏：按当前重量实时换算允许正过载；|Ny| ≥ 90% 允许过载时告警（红）
     // （flight_weight = 空机+滑油+弹药+对抗措施+当前燃油）
-    let fm = ctx.flight_model();
     let weight = fm.flight_weight(display_data.fuel_kg + display_data.fuel1_kg);
     let (neg_lim, pos_lim) = fm.allowed_load_factor(weight);
+    display_data.pos_limit = pos_lim;
+    display_data.rpm_max_allowed = fm.rpm_max_allowed;
     display_data.g_load_warning = g_load_warning_level(display_data.ny, neg_lim, pos_lim);
-    // 机动告警参数：MAX(攻角比, 过载比, 超速项)，含负向（各按自身限值）。
-    // 超速比 = MAX(表速/VNE, 马赫/MNE)，VNE/MNE 随后掠取值（与面板显示同源），
-    // 限值缺失（≤0）时该向不参与；经 speed_margin 线性映射（95%→起音阈值、
-    // 100%→长鸣阈值，连续线不硬切）后并入取最大。
-    // 最后过一道**表速门限**（`gate_by_ias`）：≤ 64 km/h 一律压到 0 —— 地面滑跑/落地滑行
-    // 时低速大攻角、过载比也容易顶阈值，不出声；状态机照常推进，长鸣能正常释放。
+    // 机动告警参数：MAX(攻角比, 过载比, 超速项)，含负向；再经表速门限（≤64 km/h 压到 0）。
     let r_ias = ratio(display_data.ias, display_data.vne);
     let r_mach = ratio(display_data.mach, display_data.vne_mach);
     display_data.maneuver_margin = crate::maneuver_tone::gate_by_ias(
@@ -1090,37 +900,6 @@ fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick
         ),
         display_data.ias,
     );
-    // 与表速格 "/1477"（VNE）的单位栏风格一致
-    text_or!(&mut display_data.g_limit_text, pos_lim > 0.0, "-", "/{:.1}", pos_lim);
-
-    // Manifold pressure
-    if display_data.manifold_pressure > 0.0 {
-        write_manifold_pressure_value(&mut display_data.manifold_pressure_text, display_data.manifold_pressure, ctx.is_imperial);
-        write_manifold_pressure_unit(&mut display_data.manifold_pressure_unit, display_data.manifold_pressure, ctx.is_imperial);
-    } else {
-        display_data.manifold_pressure_text.clear();
-        display_data.manifold_pressure_unit.clear();
-    }
-
-    // Overheat
-    let fmt_remain = |field: &mut FixedBytes<16>, secs: f64| {
-        if secs < 3600.0 {
-            let total_secs = secs as u64;
-            let m = total_secs / 60;
-            let s = total_secs % 60;
-            set_text(field, format_args!("℃/{}'{:02}", m, (s / 10) * 10));
-        } else {
-            set_text_str(field, "℃/-");
-        }
-    };
-    fmt_remain(&mut display_data.water_crit_temp_text, ctx.water_remain_secs);
-    fmt_remain(&mut display_data.oil_crit_temp_text, ctx.oil_remain_secs);
-
-    // Aircraft type
-    set_text_str(&mut display_data.aircraft_type, ctx.aircraft_type.as_str());
-
-    // Drag text
-    set_sig(&mut display_data.total_drag_text, display_data.total_drag, 2);
 }
 
 #[cfg(test)]

@@ -40,24 +40,3 @@ pub fn target_bearing_deg(x0: f64, y0: f64, x1: f64, y1: f64) -> f64 {
     compass_deg(x1 - x0, y1 - y0)
 }
 
-pub fn round_sep(sep: f64) -> f64 {
-    let abs_sep = sep.abs();
-    let step = if abs_sep <= 30.0 {
-        1.0
-    } else if abs_sep <= 50.0 {
-        2.0
-    } else if abs_sep <= 100.0 {
-        5.0
-    } else if abs_sep <= 200.0 {
-        10.0
-    } else if abs_sep <= 300.0 {
-        15.0
-    } else if abs_sep <= 400.0 {
-        20.0
-    } else if abs_sep <= 600.0 {
-        50.0
-    } else {
-        100.0
-    };
-    (sep / step).round() * step
-}

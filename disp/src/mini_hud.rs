@@ -37,7 +37,7 @@ pub fn measure_pads(font: &ab_glyph::FontRef, mini_font_size: f32) -> (f32, f32)
 /// 画 miniHUD。`px`/`py` 是**面板左上角**，由调用方按
 /// [`crate::geometry::hud_anchor`] 解析好（含"0 = 自动居中"的回退）——
 /// 这里不再读配置，免得绘制与命中测试各有一套位置口径。
-pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &super::DisplayData, map: &MapDisplay, px: f32, py: f32) {
+pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &super::DisplayData, texts: &crate::hud_texts::HudTexts, map: &MapDisplay, px: f32, py: f32) {
     let cfg = crate::hud_layout();
     let font_size = crate::geometry::mini_hud_font(cfg);
     let (w, h) = crate::geometry::mini_hud_size(cfg);
@@ -67,7 +67,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             throttle_h,
             font_size,
             throttle,
-            data.hud_text.throttle.as_str(),
+            texts.throttle.as_str(),
             throttle_color,
             colors.unit_u32(),
         );
@@ -84,7 +84,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             info_x,
             start_y,
             "I",
-            &text!(data, ias_text),
+            &text!(texts, ias_text),
             spd_color,
             font_size,
         );
@@ -92,7 +92,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         // Mach number: colored by its own MNE stage, shown near/over the Mach
         // limit or once it enters a warning stage.
         if data.mach >= 0.95 || data.mach_warning.is_active() {
-            let mach_text = data.hud_text.mini_mach.as_str();
+            let mach_text = texts.mini_mach.as_str();
             let mach_color = crate::hud_common::warning_level_color(data.mach_warning, colors.data_u32());
             draw_mini_text(
                 buffer,
@@ -132,7 +132,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             aoa_color,
             colors.unit_u32(),
         );
-        let aoa_text = data.hud_text.mini_aoa.as_str();
+        let aoa_text = texts.mini_aoa.as_str();
         draw_mini_text(
             buffer,
             width,
@@ -162,7 +162,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 alt_y,
                 " ",
-                data.hud_text.mini_radio_alt.as_str(),
+                texts.mini_radio_alt.as_str(),
                 alt_color,
                 font_size,
             );
@@ -175,13 +175,13 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 alt_y,
                 " ",
-                &text!(data, altitude_text),
+                &text!(texts, altitude_text),
                 alt_color,
                 font_size,
             );
         }
         draw_mini_text(buffer, width, height, font,
-            info_x + 4.0 * font_size, alt_y, &text!(data, energy_height_text), colors.data_u32(), font_size * SMALL_FONT_RATIO);
+            info_x + 4.0 * font_size, alt_y, &text!(texts, energy_height_text), colors.data_u32(), font_size * SMALL_FONT_RATIO);
 
         // Line 2: Config (flaps, wing, brake, gear)
         let config_y = start_y + line_spacing * 3.0;
@@ -197,7 +197,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             colors.data_u32(),
         );
 
-        let sep_val_text = text!(data, sep_text);
+        let sep_val_text = text!(texts, sep_text);
         let sep_x = info_x;
         draw_mini_info_line_right_align(
             buffer,
@@ -212,7 +212,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             font_size,
         );
 
-        let tw_text = text!(data, thrust_to_weight_text).to_string();
+        let tw_text = text!(texts, thrust_to_weight_text).to_string();
         let tw_x = sep_x + 4.0 * font_size;
         draw_mini_text(
             buffer,
@@ -239,7 +239,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 line4_y,
                 "G",
-                data.hud_text.mini_g.as_str(),
+                texts.mini_g.as_str(),
                 g_color,
                 font_size,
             );
@@ -252,7 +252,7 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
                 info_x,
                 line4_y,
                 "T",
-                &text!(data, elapsed_time_text),
+                &text!(texts, elapsed_time_text),
                 colors.data_u32(),
                 font_size,
             );
@@ -261,9 +261,9 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
         // POI distance on right side of G/T line, aligned with afterburner fuel time
         if map.nearest_poi_dist < f64::MAX {
             // 箭头 + 距离、相对速度都在 compute 阶段拼好（mini 的箭头规则与圆环不同，那边各算一份）
-            let poi_text = map.mini_poi_text.as_str();
+            let poi_text = texts.mini_poi_text.as_str();
             let poi_text_w = measure_text_raw(font, poi_text, font_size);
-            let speed_text = map.mini_poi_speed_text.as_str();
+            let speed_text = texts.mini_poi_speed_text.as_str();
             let speed_text_w = measure_text_raw(font, speed_text, font_size * 0.75);
             // 这一段是往右长出去的：**夹在面板框内**（信息列右边界 = 锚点 + 面板宽），
             // 免得又画到擦除框外边去（框外的像素擦不掉，会在拖动后留残影）。
@@ -304,12 +304,12 @@ pub fn draw_mini_hud(buffer: &mut [u32], width: usize, height: usize, data: &sup
             info_x,
             fuel_time_y,
             "L",
-            &text!(data, fuel_time_text),
+            &text!(texts, fuel_time_text),
             colors.data_u32(),
             font_size,
         );
 
-        let abft_text = text!(data, afterburner_fuel_time_text);
+        let abft_text = text!(texts, afterburner_fuel_time_text);
         draw_mini_text(
             buffer,
             width,

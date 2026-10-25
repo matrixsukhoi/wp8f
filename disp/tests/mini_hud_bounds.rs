@@ -19,26 +19,23 @@ const PY: f32 = 300.0;
 fn sample() -> DisplayData {
     let mut d = DisplayData::default();
     d.valid = 1;
-    d.ias_text.assign(b"1234");
-    d.tas_text.assign(b"1300");
-    d.mach_text.assign(b"1.20");
+    d.ias = 345.0;
+    d.tas = 1300.0;
+    d.vy = 12.3;
+    d.turn_rate = 18.5;
+    d.elapsed_secs = 754.0;
+    d.fuel_time = 1425.0;
+    d.engine_count = 1;
     d.mach = 1.2;
     d.mach_warning = wp8f_disp::WarningStage::Caution;
-    d.altitude_text.assign(b"8500");
     d.altitude = 8500.0;
     d.radio_altitude = 420.0;
-    d.vy_text.assign(b"+12.3");
     d.aoa = 11.0;
     d.max_aoa = 22.0;
-    d.sep_text.assign(b"145");
     d.sep = 145.0;
     d.ny = 7.5;
     d.g_load_warning = wp8f_disp::WarningStage::Caution;
     d.has_attitude = true;
-    d.turn_rate_text.assign(b"18.5");
-    d.elapsed_time_text.assign(b"12:34");
-    d.fuel_time_text.assign(b"23:45");
-    d.afterburner_fuel_time_text.assign(b"01:23");
     d.fuel_kg = 1826.0;
     d.fuel_percent = 62.0;
     d.engine_count = 1;
@@ -47,13 +44,6 @@ fn sample() -> DisplayData {
     d.engine_rpm[0] = 12500.0;
     d.engine_thrust[0] = 7200.0;
     d.aircraft_type.assign(b"f-16c");
-    // 渲染层文本：格式化在 compute 阶段（`core::display::updater::format_hud_text`）做好，
-    // 测试里要手工给上，否则量不到这些字符的墨迹。
-    d.hud_text.mini_mach.assign(b"M1.20");
-    d.hud_text.mini_aoa.assign("α 11".as_bytes());
-    d.hud_text.mini_radio_alt.assign(b"420R");
-    d.hud_text.mini_g.assign(b"7.5");
-    d.hud_text.throttle.assign(b"105");
     d
 }
 
@@ -63,10 +53,14 @@ fn map_with_poi() -> MapDisplay {
     m.nearest_poi_dist = 12345.0;
     m.nearest_poi_bearing = 90.0;
     m.nearest_poi_rel_speed = -123.0;
-    // 同 `sample()`：POI 文本也在 compute 阶段拼好（`format_poi_text`）
-    m.mini_poi_text.assign("→  12".as_bytes());
-    m.mini_poi_speed_text.assign(b" -123");
     m
+}
+
+/// 一帧的文本：走真正的格式化阶段（渲染线程每帧就是这么做的）。
+fn texts_for(d: &DisplayData, m: &MapDisplay) -> wp8f_disp::hud_texts::HudTexts {
+    let mut t = wp8f_disp::hud_texts::HudTexts::default();
+    wp8f_disp::hud_fmt::format_all(&mut t, d, m);
+    t
 }
 
 #[test]
@@ -77,7 +71,9 @@ fn mini_hud_ink_stays_inside_its_cleared_box() {
     let (w, h) = (1200usize, 800usize);
     for (name, map) in [("无 POI", MapDisplay::default()), ("有 POI", map_with_poi())] {
         let mut buf = vec![0u32; w * h];
-        draw_mini_hud(&mut buf, w, h, &sample(), &map, PX, PY);
+        let d = sample();
+        let texts = texts_for(&d, &map);
+        draw_mini_hud(&mut buf, w, h, &d, &texts, &map, PX, PY);
 
         let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
         for y in 0..h {

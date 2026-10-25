@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::components::{draw_grid, grid_size, DrawContext, DrawItem, RgbaColor, TextScale};
 use crate::draw::clear_rect;
+use crate::hud_texts::HudTexts;
 use crate::i18n::t;
 use crate::mini_hud;
 use crate::{get_map_data, DisplayData, MapDisplay, FONT};
@@ -13,22 +14,22 @@ struct EngineField {
     label: &'static str,
     /// 动态单位为空时的缺省单位
     default_unit: &'static str,
-    value: fn(&DisplayData) -> &[u8],
-    unit: fn(&DisplayData) -> &[u8],
+    value: fn(&HudTexts) -> &[u8],
+    unit: fn(&HudTexts) -> &[u8],
     visible: fn(&DisplayData) -> bool,
 }
 
 // 表里的噪音抑制：没有动态单位 / 恒显示 / 只在活塞机显示 / 只在有第二油箱时显示。
-const NO_UNIT: fn(&DisplayData) -> &[u8] = |_| b"";
+const NO_UNIT: fn(&HudTexts) -> &[u8] = |_| b"";
 const ALWAYS: fn(&DisplayData) -> bool = |_| true;
 const NOT_JET: fn(&DisplayData) -> bool = |d| !d.is_jet;
-const HAS_FUEL1: fn(&DisplayData) -> bool = |d| d.has_fuel1;
+const HAS_FUEL1: fn(&DisplayData) -> bool = |t| t.has_fuel1;
 
 const fn field(
     label: &'static str,
     default_unit: &'static str,
-    value: fn(&DisplayData) -> &[u8],
-    unit: fn(&DisplayData) -> &[u8],
+    value: fn(&HudTexts) -> &[u8],
+    unit: fn(&HudTexts) -> &[u8],
     visible: fn(&DisplayData) -> bool,
 ) -> EngineField {
     EngineField { label, default_unit, value, unit, visible }
@@ -62,35 +63,35 @@ pub const FLIGHT_LABEL_KEY_ORBIT: &str = "hud.f.orbit";
 
 // 发动机面板（喷气 12 项 / 活塞 14 项）。水/油温格的"单位"栏显示的是各自的**临界温度**。
 const ENGINE_ITEMS_JET: &[EngineField] = &[
-    field("hud.e.temp",        "°C",   |d| d.engine_temp_water_text.as_bytes(), |d| d.water_crit_temp_text.as_bytes(), ALWAYS),
-    field("hud.e.oil",         "°C",   |d| d.engine_temp_oil_text.as_bytes(),   |d| d.oil_crit_temp_text.as_bytes(),   ALWAYS),
-    field("hud.e.rpm",         "RPM",  |d| d.engine_rpm_text.as_bytes(),        |d| d.engine_rpm_unit.as_bytes(),      ALWAYS),
-    field("hud.e.tw_jet",      "",     |d| d.thrust_to_weight_text.as_bytes(), NO_UNIT, ALWAYS),
-    field("hud.e.thrust",      "Kgf",  |d| d.total_thrust_text.as_bytes(),      NO_UNIT, ALWAYS),
-    field("hud.e.drag",        "Kgf*", |d| d.total_drag_text.as_bytes(),        NO_UNIT, ALWAYS),
-    field("hud.e.power",       "Hp",   |d| d.engine_power_text.as_bytes(),      |d| d.power_unit_text.as_bytes(),      ALWAYS),
-    field("hud.e.fuel",        "Kg",   |d| d.fuel_kg_text.as_bytes(),           NO_UNIT, ALWAYS),
-    field("hud.e.fuel_time",   "Min",  |d| d.fuel_time_text.as_bytes(),         |d| d.fuel_sfc_text.as_bytes(),        ALWAYS),
-    field("hud.e.fuel1",       "Kg",   |d| d.fuel1_kg_text.as_bytes(),          NO_UNIT, HAS_FUEL1),
-    field("hud.e.fuel1_time",  "Min",  |d| d.fuel1_time_text.as_bytes(),        |d| d.fuel1_sfc_text.as_bytes(),       HAS_FUEL1),
-    field("hud.e.elapsed",     "Min",  |d| d.elapsed_time_text.as_bytes(),      NO_UNIT, ALWAYS),
+    field("hud.e.temp",        "°C",   |t| t.engine_temp_water_text.as_bytes(), |t| t.water_crit_temp_text.as_bytes(), ALWAYS),
+    field("hud.e.oil",         "°C",   |t| t.engine_temp_oil_text.as_bytes(),   |t| t.oil_crit_temp_text.as_bytes(),   ALWAYS),
+    field("hud.e.rpm",         "RPM",  |t| t.engine_rpm_text.as_bytes(),        |t| t.engine_rpm_unit.as_bytes(),      ALWAYS),
+    field("hud.e.tw_jet",      "",     |t| t.thrust_to_weight_text.as_bytes(), NO_UNIT, ALWAYS),
+    field("hud.e.thrust",      "Kgf",  |t| t.total_thrust_text.as_bytes(),      NO_UNIT, ALWAYS),
+    field("hud.e.drag",        "Kgf*", |t| t.total_drag_text.as_bytes(),        NO_UNIT, ALWAYS),
+    field("hud.e.power",       "Hp",   |t| t.engine_power_text.as_bytes(),      |t| t.power_unit_text.as_bytes(),      ALWAYS),
+    field("hud.e.fuel",        "Kg",   |t| t.fuel_kg_text.as_bytes(),           NO_UNIT, ALWAYS),
+    field("hud.e.fuel_time",   "Min",  |t| t.fuel_time_text.as_bytes(),         |t| t.fuel_sfc_text.as_bytes(),        ALWAYS),
+    field("hud.e.fuel1",       "Kg",   |t| t.fuel1_kg_text.as_bytes(),          NO_UNIT, HAS_FUEL1),
+    field("hud.e.fuel1_time",  "Min",  |t| t.fuel1_time_text.as_bytes(),        |t| t.fuel1_sfc_text.as_bytes(),       HAS_FUEL1),
+    field("hud.e.elapsed",     "Min",  |t| t.elapsed_time_text.as_bytes(),      NO_UNIT, ALWAYS),
 ];
 
 const ENGINE_ITEMS_PISTON: &[EngineField] = &[
-    field("hud.e.temp",        "°C",   |d| d.engine_temp_water_text.as_bytes(), |d| d.water_crit_temp_text.as_bytes(), ALWAYS),
-    field("hud.e.oil",         "°C",   |d| d.engine_temp_oil_text.as_bytes(),   |d| d.oil_crit_temp_text.as_bytes(),   ALWAYS),
-    field("hud.e.rpm",         "RPM",  |d| d.engine_rpm_text.as_bytes(),        |d| d.engine_rpm_unit.as_bytes(),      ALWAYS),
-    field("hud.e.tw_piston",   "",     |d| d.thrust_to_weight_text.as_bytes(), NO_UNIT, ALWAYS),
-    field("hud.e.thrust",      "Kgf",  |d| d.total_thrust_text.as_bytes(),      NO_UNIT, ALWAYS),
-    field("hud.e.drag",        "Kgf*", |d| d.total_drag_text.as_bytes(),        NO_UNIT, ALWAYS),
-    field("hud.e.map",         "",     |d| d.manifold_pressure_text.as_bytes(), |d| d.manifold_pressure_unit.as_bytes(), NOT_JET),
-    field("hud.e.rated",       "Hp",   |d| d.rated_power_text.as_bytes(),       NO_UNIT, NOT_JET),
-    field("hud.e.power",       "Hp",   |d| d.engine_power_text.as_bytes(),      |d| d.power_unit_text.as_bytes(),      ALWAYS),
-    field("hud.e.fuel",        "Kg",   |d| d.fuel_kg_text.as_bytes(),           NO_UNIT, ALWAYS),
-    field("hud.e.fuel_time",   "Min",  |d| d.fuel_time_text.as_bytes(),         |d| d.fuel_sfc_text.as_bytes(),        ALWAYS),
-    field("hud.e.fuel1",       "Kg",   |d| d.fuel1_kg_text.as_bytes(),          NO_UNIT, HAS_FUEL1),
-    field("hud.e.fuel1_time",  "Min",  |d| d.fuel1_time_text.as_bytes(),        |d| d.fuel1_sfc_text.as_bytes(),       HAS_FUEL1),
-    field("hud.e.elapsed",     "Min",  |d| d.elapsed_time_text.as_bytes(),      NO_UNIT, ALWAYS),
+    field("hud.e.temp",        "°C",   |t| t.engine_temp_water_text.as_bytes(), |t| t.water_crit_temp_text.as_bytes(), ALWAYS),
+    field("hud.e.oil",         "°C",   |t| t.engine_temp_oil_text.as_bytes(),   |t| t.oil_crit_temp_text.as_bytes(),   ALWAYS),
+    field("hud.e.rpm",         "RPM",  |t| t.engine_rpm_text.as_bytes(),        |t| t.engine_rpm_unit.as_bytes(),      ALWAYS),
+    field("hud.e.tw_piston",   "",     |t| t.thrust_to_weight_text.as_bytes(), NO_UNIT, ALWAYS),
+    field("hud.e.thrust",      "Kgf",  |t| t.total_thrust_text.as_bytes(),      NO_UNIT, ALWAYS),
+    field("hud.e.drag",        "Kgf*", |t| t.total_drag_text.as_bytes(),        NO_UNIT, ALWAYS),
+    field("hud.e.map",         "",     |t| t.manifold_pressure_text.as_bytes(), |t| t.manifold_pressure_unit.as_bytes(), NOT_JET),
+    field("hud.e.rated",       "Hp",   |t| t.rated_power_text.as_bytes(),       NO_UNIT, NOT_JET),
+    field("hud.e.power",       "Hp",   |t| t.engine_power_text.as_bytes(),      |t| t.power_unit_text.as_bytes(),      ALWAYS),
+    field("hud.e.fuel",        "Kg",   |t| t.fuel_kg_text.as_bytes(),           NO_UNIT, ALWAYS),
+    field("hud.e.fuel_time",   "Min",  |t| t.fuel_time_text.as_bytes(),         |t| t.fuel_sfc_text.as_bytes(),        ALWAYS),
+    field("hud.e.fuel1",       "Kg",   |t| t.fuel1_kg_text.as_bytes(),          NO_UNIT, HAS_FUEL1),
+    field("hud.e.fuel1_time",  "Min",  |t| t.fuel1_time_text.as_bytes(),        |t| t.fuel1_sfc_text.as_bytes(),       HAS_FUEL1),
+    field("hud.e.elapsed",     "Min",  |t| t.elapsed_time_text.as_bytes(),      NO_UNIT, ALWAYS),
 ];
 
 /// 全部 HUD 标签**键**（飞行 12 + 盘旋率 + 发动机两套 + 友军面板 6），去重前。
@@ -132,6 +133,9 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
     });
     // Link-8 友军快照：每帧**只取一次**最新（写端在 datalink 线程里，这里不等待、
     // 也不克隆历史版本）。数据链没启用时是空列表 → 友军面板/标记自然不画。
+    // 格式化阶段：把环里的数值写成文本（渲染线程每帧一次，之后只落屏）
+    let mut texts = HudTexts::default();
+    crate::hud_fmt::format_all(&mut texts, data, map);
     let link_tracks = datalink::link_ring::latest_tracks();
 
     let scale = TextScale::new(crate::hud_layout().font_size).with_scale(1.25);
@@ -157,16 +161,16 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
     let flight_y = panel_y(drag_flight_y, layout.flight_info_y);
     let flight_items: [DrawItem; 12] = [
         // Two-stage overspeed warning (yellow/red) + speed-brake caution (yellow).
-        item!(t(FLIGHT_LABEL_KEYS[0]), data.ias_text.as_bytes(), data.vne_text.as_bytes(), dw, lw).with_color(
+        item!(t(FLIGHT_LABEL_KEYS[0]), texts.ias_text.as_bytes(), texts.vne_text.as_bytes(), dw, lw).with_color(
             RgbaColor::from_argb(crate::hud_common::ias_warning_color(data, layout.data_color))),
-        item!(t(FLIGHT_LABEL_KEYS[1]), data.tas_text.as_bytes(), b"Km/h", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[1]), texts.tas_text.as_bytes(), b"Km/h", dw, lw),
         // Mach colored by its own MNE warning stage.
-        item!(t(FLIGHT_LABEL_KEYS[2]), data.mach_text.as_bytes(), data.mne_text.as_bytes(), dw, lw).with_color(
+        item!(t(FLIGHT_LABEL_KEYS[2]), texts.mach_text.as_bytes(), texts.mne_text.as_bytes(), dw, lw).with_color(
             RgbaColor::from_argb(crate::hud_common::warning_level_color(data.mach_warning, layout.data_color))),
-        item!(t(FLIGHT_LABEL_KEYS[3]), data.altitude_text.as_bytes(), b"M", dw, lw),
-        item!(t(FLIGHT_LABEL_KEYS[4]), data.vy_text.as_bytes(), b"M/s", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[3]), texts.altitude_text.as_bytes(), b"M", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[4]), texts.vy_text.as_bytes(), b"M/s", dw, lw),
         // SEP 两级告警（≤0 黄，< -300 红）
-        item!(t(FLIGHT_LABEL_KEYS[5]), data.sep_text.as_bytes(), b"M/s", dw, lw).with_color(
+        item!(t(FLIGHT_LABEL_KEYS[5]), texts.sep_text.as_bytes(), b"M/s", dw, lw).with_color(
             RgbaColor::from_argb(crate::hud_common::warning_level_color(
                 crate::hud_common::sep_warning_level(data.sep),
                 layout.data_color,
@@ -175,18 +179,18 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
         // 两者互斥、同一个格子，所以是两个键（中文标签本来就不同）
         item!(
             if data.has_attitude { t(FLIGHT_LABEL_KEY_TURN) } else { t(FLIGHT_LABEL_KEY_ORBIT) },
-            data.turn_rate_text.as_bytes(), b"\xc2\xb0/s", dw, lw),
-        item!(t(FLIGHT_LABEL_KEYS[7]), data.roll_rate_text.as_bytes(), b"\xc2\xb0/s", dw, lw),
-        item!(t(FLIGHT_LABEL_KEYS[8]), data.pitch_text.as_bytes(), b"\xc2\xb0", dw, lw),
-        item!(t(FLIGHT_LABEL_KEYS[9]), data.aoa_format_text.as_bytes(), b"\xc2\xb0", dw, lw),
+            texts.turn_rate_text.as_bytes(), b"\xc2\xb0/s", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[7]), texts.roll_rate_text.as_bytes(), b"\xc2\xb0/s", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[8]), texts.pitch_text.as_bytes(), b"\xc2\xb0", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[9]), texts.aoa_format_text.as_bytes(), b"\xc2\xb0", dw, lw),
         // 单位栏显示当前重量下的允许正过载，如 "/15.4"（风格同 VNE）
-        item!(t(FLIGHT_LABEL_KEYS[10]), data.g_load_text.as_bytes(), data.g_limit_text.as_bytes(), dw, lw)
+        item!(t(FLIGHT_LABEL_KEYS[10]), texts.g_load_text.as_bytes(), texts.g_limit_text.as_bytes(), dw, lw)
             // 过载统一告警逻辑：≥90% 允许过载时红色
             .with_color(RgbaColor::from_argb(crate::hud_common::g_warning_color(
                 data.g_load_warning,
                 layout.data_color,
             ))),
-        item!(t(FLIGHT_LABEL_KEYS[11]), data.turn_radius_text.as_bytes(), b"M", dw, lw),
+        item!(t(FLIGHT_LABEL_KEYS[11]), texts.turn_radius_text.as_bytes(), b"M", dw, lw),
     ];
     let margin = scale.label_size();
     let flight_items = {
@@ -234,8 +238,8 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
     let engine_items: Vec<DrawItem> = items_def.iter()
         .filter(|f| (f.visible)(data))
         .map(|f| {
-            let unit_bytes = (f.unit)(data);
-            let value: Cow<'_, str> = Cow::Borrowed(core::str::from_utf8((f.value)(data)).unwrap_or(""));
+            let unit_bytes = (f.unit)(&texts);
+            let value: Cow<'_, str> = Cow::Borrowed(core::str::from_utf8((f.value)(&texts)).unwrap_or(""));
             let unit_str: Cow<'_, str> = if unit_bytes.is_empty() {
                 Cow::Borrowed(f.default_unit)
             } else {
@@ -295,7 +299,7 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
 
         if layout.map_enabled && map_w > 0 && map_h > 0 {
             crate::hud::map_panel::draw_map_panel(
-                buffer, width, height, map, &crate::map_image(), data, &link_tracks,
+                buffer, width, height, map, &crate::map_image(), data, &texts, &link_tracks,
                 map_x as usize, map_y as usize, map_w, map_h,
             );
         }
@@ -321,11 +325,11 @@ pub fn draw_hud(buffer: &mut [u32], width: usize, height: usize, data: &DisplayD
         crate::HudType::Off => {}
         crate::HudType::Circle => {
             let (cx, cy) = hud_anchor_of(drag, layout, drag_mode, width, height);
-            crate::circle_hud::draw_circle_hud(buffer, width, height, data, map, cx, cy);
+            crate::circle_hud::draw_circle_hud(buffer, width, height, data, &texts, map, cx, cy);
         }
         crate::HudType::Mini => {
             let (px, py) = hud_anchor_of(drag, layout, drag_mode, width, height);
-            mini_hud::draw_mini_hud(buffer, width, height, data, map, px, py);
+            mini_hud::draw_mini_hud(buffer, width, height, data, &texts, map, px, py);
         }
     }
 }

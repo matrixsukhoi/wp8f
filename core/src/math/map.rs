@@ -36,18 +36,6 @@ pub fn calc_weighted_distance(
     ((dx * dx) * scale_x * scale_x + (dy * dy) * scale_y * scale_y).sqrt()
 }
 
-pub fn calc_map_zone(player_x: f64, player_y: f64, map_info: &MapInfo) -> wp8f_disp::MapZone {
-    // 算法单一实现于 disp（友军面板区域推导共用，避免两边漂移）；
-    // 返回值是**栈上定长**的 `MapZone`（`as_str()` 零分配），本函数每帧都会调一次。
-    wp8f_disp::map_zone_label(
-        player_x,
-        player_y,
-        map_info.maxsize,
-        map_info.map_min,
-        map_info.grid_zero,
-        map_info.grid_steps,
-    )
-}
 
 #[derive(Debug, Clone)]
 pub struct ObjectCoords {
