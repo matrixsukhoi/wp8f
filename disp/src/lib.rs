@@ -191,9 +191,6 @@ pub struct RingConfig {
     pub map_samples: u32,
 }
 
-/// 槽数上限：一帧 `DisplayData` 是几百字节，256 槽 ≈ 8 秒 @30 Hz，再多只是白占内存。
-const RING_SLOTS_MAX: u32 = 256;
-
 fn default_ring_frames() -> u32 { wp8f_ring::Ring::<()>::SLOTS as u32 }
 fn default_ring_map_samples() -> u32 { wp8f_ring::Ring::<()>::SLOTS as u32 }
 

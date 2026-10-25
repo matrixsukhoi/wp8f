@@ -4,7 +4,7 @@
 //!
 //! 从 `lib.rs` 拆出的第三块；对外路径不变（`lib.rs` 有 `pub use clamp::{...}`）。
 
-use super::{REFRESH_HZ_MAX, REFRESH_HZ_MIN, RING_SLOTS_MAX};
+use super::{REFRESH_HZ_MAX, REFRESH_HZ_MIN};
 
 // -------------------------------------------------------- 配置派生量区间 --
 /// 配置派生量的**合法区间**：区间和默认值写在一起，调用点不再抄上下限字面量。
@@ -41,6 +41,9 @@ impl<T: PartialOrd + Copy> Clamp<T> {
 /// 数据刷新频率区间（Hz）。上限同时是「地图记录间隔最多 1 秒的数据帧数」与
 /// 「记录采样率最高 = 一个主循环节拍」的上限。
 pub const REFRESH_HZ_RANGE: Clamp<u32> = Clamp::new(REFRESH_HZ_MIN, REFRESH_HZ_MAX);
+/// 槽数上限：一帧 `DisplayData` 是几百字节，256 槽 ≈ 8 秒 @30 Hz，再多只是白占内存。
+pub(crate) const RING_SLOTS_MAX: u32 = 256;
+
 /// 环形缓冲槽数区间（`2..=256`）：1 槽时"下一个待写槽"就是正在读的那个。
 pub const RING_SLOTS_RANGE: Clamp<u32> =
     Clamp::new(wp8f_ring::Ring::<()>::MIN_SLOTS as u32, RING_SLOTS_MAX);
