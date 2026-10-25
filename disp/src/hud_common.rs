@@ -467,8 +467,8 @@ mod tests {
         d.airbrake = 100.0;
         d.brake_caution = true;
         let items = status_items(&d, colors);
-        assert!(items.iter().any(|(s, _)| s == "GEA"), "放开中应显示 GEA");
-        assert!(items.iter().any(|(s, _)| s == "BRK"), "放开中应显示 BRK");
+        assert!(items.as_slice().iter().any(|i| i.text() == "GEA"), "放开中应显示 GEA");
+        assert!(items.as_slice().iter().any(|i| i.text() == "BRK"), "放开中应显示 BRK");
 
         // 下降沿（收回中）：整项隐藏
         d.gear = 30.0;
@@ -476,8 +476,8 @@ mod tests {
         d.airbrake = 40.0;
         d.brake_caution = false;
         let items = status_items(&d, colors);
-        assert!(!items.iter().any(|(s, _)| s == "GEA"), "收回中应隐藏 GEA");
-        assert!(!items.iter().any(|(s, _)| s == "BRK"), "收回中应隐藏 BRK");
+        assert!(!items.as_slice().iter().any(|i| i.text() == "GEA"), "收回中应隐藏 GEA");
+        assert!(!items.as_slice().iter().any(|i| i.text() == "BRK"), "收回中应隐藏 BRK");
     }
 
     #[test]
@@ -540,25 +540,80 @@ mod tests {
     }
 }
 
-pub fn status_items(data: &DisplayData, colors: &HudColors) -> Vec<(String, u32)> {
-    let mut items = Vec::new();
+/// 状态行的一项（`F` / `W` / `BRK` / `GEA`）：文本是**栈上定长缓冲**，画 HUD 时零分配。
+#[derive(Debug, Clone, Default)]
+pub struct StatusItem {
+    text: crate::FixedBytes<8>,
+    color: u32,
+}
+
+impl StatusItem {
+    pub fn text(&self) -> &str {
+        self.text.as_str()
+    }
+
+    pub fn color(&self) -> u32 {
+        self.color
+    }
+}
+
+/// 状态行最多几项：襟翼 / 后掠 / 刹车 / 起落架。
+pub const MAX_STATUS_ITEMS: usize = 4;
+
+/// 一行的状态项集合：**定长栈数组**，没有 `Vec`/`String`（这两个以前每帧都分配）。
+#[derive(Debug, Clone, Default)]
+pub struct StatusItems {
+    items: [StatusItem; MAX_STATUS_ITEMS],
+    len: usize,
+}
+
+impl StatusItems {
+    pub fn as_slice(&self) -> &[StatusItem] {
+        &self.items[..self.len]
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    fn push_text(&mut self, text: &str, color: u32) {
+        if let Some(slot) = self.items.get_mut(self.len) {
+            slot.text.assign(text.as_bytes());
+            slot.color = color;
+            self.len += 1;
+        }
+    }
+
+    fn push_args(&mut self, args: std::fmt::Arguments<'_>, color: u32) {
+        if let Some(slot) = self.items.get_mut(self.len) {
+            let _ = std::fmt::Write::write_fmt(&mut slot.text, args);
+            slot.color = color;
+            self.len += 1;
+        }
+    }
+}
+
+pub fn status_items(data: &DisplayData, colors: &HudColors) -> StatusItems {
+    let mut out = StatusItems::default();
+    let data_color = colors.data_u32();
+    let unit_color = colors.unit_u32();
     if data.flaps > 0.0 {
-        items.push((format!("F{:.0}", data.flaps), colors.data_u32()));
+        out.push_args(format_args!("F{:.0}", data.flaps), data_color);
     }
     if data.wing_sweep > 0.0 {
-        items.push((format!("W{:.0}", (data.wing_sweep * 100.0).round()), colors.data_u32()));
+        out.push_args(format_args!("W{:.0}", (data.wing_sweep * 100.0).round()), data_color);
     }
     // BRK/GEA 与告警共用同一套边沿判定：上升沿/保持（放开中）显示、100% 绿色，
     // 放开未到位灰色；下降沿（收回中）整项隐藏（不再以灰色显示）
     if data.brake_caution && data.airbrake > 0.0 {
-        let color = if data.airbrake >= 100.0 { colors.data_u32() } else { colors.unit_u32() };
-        items.push(("BRK".to_string(), color));
+        let color = if data.airbrake >= 100.0 { data_color } else { unit_color };
+        out.push_text("BRK", color);
     }
     if data.gear_armed && data.gear > 0.0 {
-        let color = if data.gear >= 100.0 { colors.data_u32() } else { colors.unit_u32() };
-        items.push(("GEA".to_string(), color));
+        let color = if data.gear >= 100.0 { data_color } else { unit_color };
+        out.push_text("GEA", color);
     }
-    items
+    out
 }
 
 pub fn draw_inline_items(
@@ -568,14 +623,19 @@ pub fn draw_inline_items(
     font: &ab_glyph::FontRef,
     x: f32,
     y: f32,
-    items: &[(String, u32)],
+    items: &StatusItems,
     font_size: f32,
 ) {
     let mut x_offset = 0.0;
-    for (i, (text, color)) in items.iter().enumerate() {
-        let display = if i > 0 { format!(" {}", text) } else { text.clone() };
-        let width = measure_text_raw(font, &display, font_size);
-        draw_text_raw(buffer, buf_width, buf_height, font, x + x_offset, y, &display, font_size, *color);
+    for (i, item) in items.as_slice().iter().enumerate() {
+        // 项与项之间一个空格：量一下宽度就够，不必 `format!(" {}")` 拼串（以前每项一次分配）
+        if i > 0 {
+            x_offset += measure_text_raw(font, " ", font_size);
+        }
+        let width = measure_text_raw(font, item.text(), font_size);
+        draw_text_raw(
+            buffer, buf_width, buf_height, font, x + x_offset, y, item.text(), font_size, item.color(),
+        );
         x_offset += width;
     }
 }

@@ -32,6 +32,9 @@ pub const FRAME_COLUMNS: [&str; 12] = [
     "heading_deg", "ias_ms", "tas_ms", "ny", "aoa_deg", "mach",
 ];
 
+/// km/h → m/s：记录的 IAS/TAS 是 km/h，回放渲染契约要 m/s（与 `logger::convert` 同值）。
+const MS_TO_KMH: f64 = 3.6;
+
 /// 读并解包一个 `.wpr`。
 fn read_record(path: &Path) -> Result<wpr::Record, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("读取失败: {e}"))?;
@@ -70,8 +73,8 @@ pub fn parse_wpr_file(path: &Path) -> Result<Value, String> {
                     v[wpr::col::ROLL],
                     -v[wpr::col::PITCH],                         // 抬头为正（渲染契约）
                     v[wpr::col::HEADING],
-                    v[wpr::col::IAS] / 3.6,                      // m/s（渲染契约）
-                    v[wpr::col::TAS] / 3.6,
+                    v[wpr::col::IAS] / MS_TO_KMH,                // m/s（渲染契约）
+                    v[wpr::col::TAS] / MS_TO_KMH,
                     v[wpr::col::NY],
                     v[wpr::col::AOA],
                     v[wpr::col::MACH],

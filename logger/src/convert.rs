@@ -16,6 +16,10 @@ use crate::wpr::{col, fin, sanitize, Record, RecordRow, NUM_COLS};
 /// 地球平均半径（米）——球面近似，与 HUD 侧的地图换算同口径。
 pub const EARTH_RADIUS_M: f64 = 6_371_000.0;
 
+/// km/h → m/s 的换算因子（记录里 IAS/TAS 存 km/h，TacView/回放要 m/s）。
+/// 与 `wp8f_core::constants::MS_TO_KMH` 同值 —— 两个 crate 互不依赖，各留一份并各自注明。
+pub const MS_TO_KMH: f64 = 3.6;
+
 /// 零点经纬度（地图中心 `(0.5, 0.5)` 对应的真实位置）。默认莫斯科市中心
 /// （与旧配置 `origin_lat/origin_lon` 的默认值一致，方便直接对比老录制）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -140,8 +144,8 @@ pub fn to_tacview_acmi(rec: &Record, origin: Origin) -> String {
             fin(-v[col::PITCH]), // ACMI 抬头为正，记录是 HUD 口径
             fin(v[col::HEADING])
         ));
-        line.push_str(&format!(",TAS={:.2}", fin(v[col::TAS] / 3.6)));
-        line.push_str(&format!(",IAS={:.2}", fin(v[col::IAS] / 3.6)));
+        line.push_str(&format!(",TAS={:.2}", fin(v[col::TAS] / MS_TO_KMH)));
+        line.push_str(&format!(",IAS={:.2}", fin(v[col::IAS] / MS_TO_KMH)));
         line.push_str(&format!(",Mach={:.3}", fin(v[col::MACH])));
         line.push_str(&format!(",AOA={:.2}", fin(v[col::AOA])));
         line.push_str(&format!(",AOS={:.2}", fin(v[col::AOS])));
@@ -176,8 +180,8 @@ pub fn to_tacview_csv(rec: &Record, origin: Origin) -> String {
             fin(v[col::ROLL]),
             fin(-v[col::PITCH]), // 抬头为正
             fin(v[col::HEADING]),
-            fin(v[col::IAS] / 3.6),
-            fin(v[col::TAS] / 3.6),
+            fin(v[col::IAS] / MS_TO_KMH),
+            fin(v[col::TAS] / MS_TO_KMH),
             fin(v[col::MACH]),
             fin(v[col::AOA]),
             fin(v[col::AOS]),

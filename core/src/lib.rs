@@ -21,7 +21,7 @@ mod fmt;
 mod math;
 
 pub use channel::async_channel::AsyncChannel;
-pub use constants::GRAVITY;
+pub use constants::{GRAVITY, MS_TO_KMH};
 pub use fmt::value::format_adaptive;
 pub use context::{get_timestamp_ms, get_timestamp_ns, FlightContext};
 pub use display::updater::{update_display_from_state, update_map_display};

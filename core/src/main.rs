@@ -8,7 +8,7 @@ use wp8f_core::{
     channel::async_channel::AsyncChannel, channel::Channel, format_adaptive,
     frame_clock::FrameClock, get_timestamp_ns, parser, update_display_from_state,
     update_map_display, DisplayData, FlightContext, FlightState, Indicators, MapInfo, MapObjData,
-    GRAVITY,
+    GRAVITY, MS_TO_KMH,
 };
 use wp8f_disp;
 use wp8f_flightmodel;
@@ -282,8 +282,8 @@ fn print_fm_report(fm: &wp8f_flightmodel::FlightModel, ctx: &FlightContext) {
         let weight_5min_108 = fm.flight_weight(fuel_5min_800_108);
         println!("T/W @ sea level:");
         for speed in speeds {
-            let thrust_mil = fm.thrust(0.0, speed as f64 / 3.6) / GRAVITY;
-            let thrust_wep = fm.afterburner_thrust(0.0, speed as f64 / 3.6) / GRAVITY;
+            let thrust_mil = fm.thrust(0.0, speed as f64 / MS_TO_KMH) / GRAVITY;
+            let thrust_wep = fm.afterburner_thrust(0.0, speed as f64 / MS_TO_KMH) / GRAVITY;
             let thrust_102 = wp8f_flightmodel::thrusts_at(&fm.engines(), speed as f64, 0.0, 102.0);
             let thrust_105 = wp8f_flightmodel::thrusts_at(&fm.engines(), speed as f64, 0.0, 105.0);
             let thrust_108 = wp8f_flightmodel::thrusts_at(&fm.engines(), speed as f64, 0.0, 108.0);
