@@ -15,7 +15,7 @@ impl RgbaColor {
     }
 
     /// 内部打包：`0xAARRGGBB`（**不是**配置文件里的 `#RRGGBBAA` 顺序）。
-    /// 配置文件只在 `crate::hex_color` 里按 RGBA 读写，其余代码一律用这个打包。
+    /// 配置文件只在 `crate::config` 的 `hex_color` 模块里按 RGBA 读写，其余代码一律用这个打包。
     pub fn to_argb(&self) -> u32 {
         ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
     }

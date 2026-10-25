@@ -102,3 +102,22 @@ impl<'de, const N: usize> Deserialize<'de> for FixedBytes<N> {
         deserializer.deserialize_bytes(FbVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `FixedBytes::to_array`：不足补 0、超出按目标宽度截断（给 POD 结构体的定长字段用）。
+    #[test]
+    fn fixed_bytes_to_array_pads_and_truncates() {
+        let mut short: FixedBytes<8> = FixedBytes::new();
+        short.assign(b"ab");
+        assert_eq!(short.to_array::<4>(), [b'a', b'b', 0, 0], "不足补 0");
+
+        let mut long: FixedBytes<8> = FixedBytes::new();
+        long.assign(b"abcdef");
+        assert_eq!(long.to_array::<4>(), *b"abcd", "超出按目标宽度截断");
+        assert_eq!(long.to_array::<8>(), [b'a', b'b', b'c', b'd', b'e', b'f', 0, 0]);
+        assert_eq!(FixedBytes::<8>::new().to_array::<4>(), [0u8; 4]);
+    }
+}

@@ -522,7 +522,7 @@ mod tests {
         // ① 代码里的默认（缺键时用它，也是随包分发的那份）
         let want = format!("{FONT_DIR}/{DEFAULT_TEXT_FILE}");
         assert_eq!(
-            crate::default_font_path(),
+            crate::config::default_font_path(),
             want,
             "serde default / Default::default() 里的 font_path 必须是随包那份 Sarasa"
         );
