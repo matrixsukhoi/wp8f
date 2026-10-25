@@ -972,7 +972,10 @@ fn format_map_text(map: &mut MapDisplay, map_info: &crate::parser::MapInfo, near
     write_format_dist(&mut map.nearest_airfield_text, "AF", map.nearest_airfield_dist, nearest_airfield_bearing);
     write_format_dist(&mut map.nearest_bombing_point_text, "BP", map.nearest_bombing_dist, map.nearest_bombing_bearing);
     write_format_dist(&mut map.nearest_poi_text, "POI", map.nearest_poi_dist, map.nearest_poi_bearing);
-    set_text_str(&mut map.map_zone_text, &crate::math::map::calc_map_zone(player_x, player_y, map_info));
+    set_text_str(
+        &mut map.map_zone_text,
+        crate::math::map::calc_map_zone(player_x, player_y, map_info).as_str(),
+    );
 }
 
 fn format_display_text(display_data: &mut DisplayData, ctx: &FlightContext, tick: &Tick) {

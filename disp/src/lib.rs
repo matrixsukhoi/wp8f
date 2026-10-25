@@ -5,7 +5,7 @@ pub mod font;
 pub(crate) mod geometry;
 pub mod hud;
 mod hud_common;
-pub use hud_common::map_zone_label;
+pub use hud_common::{map_zone_label, MapZone};
 pub mod i18n;
 pub mod mini_hud;
 pub(crate) mod paths;

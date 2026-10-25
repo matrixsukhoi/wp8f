@@ -19,6 +19,52 @@ pub fn sep_warning_level(sep: f64) -> crate::WarningStage {
     }
 }
 
+/// 地图区域格（如 `D3`）：1 个字母 + 最多 2 位数字（列钳 `1..=20`）。
+///
+/// **栈上定长**（`[u8; 3]` + len），`as_str()` 零分配 —— 每帧要给玩家和每个友军各算一次，
+/// 以前返回 `String` 就是每帧每目标一次分配。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MapZone {
+    buf: [u8; 3],
+    len: u8,
+}
+
+impl MapZone {
+    /// 空区域（地图网格缺失时）。
+    pub const EMPTY: Self = Self { buf: [0; 3], len: 0 };
+
+    /// `row` 从 0 起（`'A' + row`），`col` 已钳到 `1..=20`。
+    fn new(row: i32, col: i32) -> Self {
+        let mut buf = [0u8; 3];
+        buf[0] = b'A'.wrapping_add(row as u8);
+        let col = col.clamp(1, 20);
+        let len = if col >= 10 {
+            buf[1] = b'0' + (col / 10) as u8;
+            buf[2] = b'0' + (col % 10) as u8;
+            3
+        } else {
+            buf[1] = b'0' + col as u8;
+            2
+        };
+        Self { buf, len }
+    }
+
+    pub fn as_str(&self) -> &str {
+        // 只写 ASCII 数字/字母
+        std::str::from_utf8(&self.buf[..self.len as usize]).unwrap_or("")
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl std::fmt::Display for MapZone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// 由归一化地图坐标推导地图区域格（如 "D3"），与游戏地图网格一致：
 /// `abs = norm × maxsize + map_min`，列 = (abs_x - grid_zero_x)/grid_steps_x + 1，
 /// 行 = (abs_y + grid_zero_y)/grid_steps_y → 行字母 'A' + 行号。单一实现，
@@ -30,20 +76,19 @@ pub fn map_zone_label(
     map_min: [f64; 2],
     grid_zero: [f64; 2],
     grid_steps: [f64; 2],
-) -> String {
+) -> MapZone {
     if grid_steps[0] == 0.0 || grid_steps[1] == 0.0 || maxsize[0] == 0.0 || maxsize[1] == 0.0 {
-        return String::new();
+        return MapZone::EMPTY;
     }
     let abs_x = x_norm * maxsize[0] + map_min[0];
     let abs_y = y_norm * maxsize[1] + map_min[1];
     let col = ((abs_x - grid_zero[0]) / grid_steps[0] + 1.0).floor() as i32;
     let row = ((abs_y + grid_zero[1]) / grid_steps[1]).floor() as i32;
-    let letter = (b'A'.wrapping_add(row as u8)) as char;
-    format!("{}{}", letter, col.clamp(1, 20))
+    MapZone::new(row, col)
 }
 
 /// `map_zone_label` 的 MapDisplay 便捷版（友军面板使用）。
-pub fn map_zone_of(map: &MapDisplay, x: f64, y: f64) -> String {
+pub fn map_zone_of(map: &MapDisplay, x: f64, y: f64) -> MapZone {
     map_zone_label(x, y, map.map_maxsize, map.map_min, map.grid_zero, map.grid_steps)
 }
 
@@ -489,11 +534,18 @@ mod tests {
         let grid_steps = [5500.0, 5500.0];
         // abs(20000, 0) → 列 3、行 D
         let zone = map_zone_label(85536.0 / 131072.0, 0.5, maxsize, map_min, grid_zero, grid_steps);
-        assert_eq!(zone, "D3");
+        assert_eq!(zone.as_str(), "D3");
+        assert_eq!(zone.to_string(), "D3", "Display 与 as_str 同源");
         // 中心 abs(0,0) → 列钳到 1、行 D
-        assert_eq!(map_zone_label(0.5, 0.5, maxsize, map_min, grid_zero, grid_steps), "D1");
+        assert_eq!(map_zone_label(0.5, 0.5, maxsize, map_min, grid_zero, grid_steps).as_str(), "D1");
+        // 两位数列：列 20 → 3 字节（"D20"）
+        let two = MapZone::new(3, 20);
+        assert_eq!(two.as_str(), "D20");
+        assert_eq!(two.as_str().len(), 3);
         // 网格缺失时安全返回空
-        assert_eq!(map_zone_label(0.5, 0.5, maxsize, map_min, grid_zero, [0.0, 0.0]), "");
+        let empty = map_zone_label(0.5, 0.5, maxsize, map_min, grid_zero, [0.0, 0.0]);
+        assert_eq!(empty.as_str(), "");
+        assert!(empty.is_empty());
     }
 
     #[test]
