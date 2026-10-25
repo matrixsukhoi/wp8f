@@ -139,45 +139,8 @@ fn default_voice_path() -> String {
     "resource/voice/zh_xiaoxuan_calm_youngadultfemale_1_04".to_string()
 }
 
-// -------------------------------------------------------- 配置派生量区间 --
-/// 配置派生量的**合法区间**：区间和默认值写在一起，调用点不再抄上下限字面量。
-///
-/// 只用于**配置派生量**（刷新率 / 地图记录间隔 / 环槽数 …）；几何与像素的钳制属于布局语义，
-/// 不在这里。
-#[derive(Debug, Clone, Copy)]
-pub struct Clamp<T> {
-    pub lo: T,
-    pub hi: T,
-}
-
-impl<T: PartialOrd + Copy> Clamp<T> {
-    pub const fn new(lo: T, hi: T) -> Self {
-        Self { lo, hi }
-    }
-
-    /// 收进区间。`lo > hi`（配置写反）时按 `lo` 处理 —— 不 panic。
-    pub fn apply(self, v: T) -> T {
-        if v < self.lo {
-            self.lo
-        } else if v > self.hi {
-            self.hi
-        } else {
-            v
-        }
-    }
-
-    pub fn contains(self, v: T) -> bool {
-        v >= self.lo && v <= self.hi
-    }
-}
-
-/// 数据刷新频率区间（Hz）。上限同时是「地图记录间隔最多 1 秒的数据帧数」与
-/// 「记录采样率最高 = 一个主循环节拍」的上限。
-pub const REFRESH_HZ_RANGE: Clamp<u32> = Clamp::new(REFRESH_HZ_MIN, REFRESH_HZ_MAX);
-/// 环形缓冲槽数区间（`2..=256`）：1 槽时"下一个待写槽"就是正在读的那个。
-pub const RING_SLOTS_RANGE: Clamp<u32> =
-    Clamp::new(wp8f_ring::Ring::<()>::MIN_SLOTS as u32, RING_SLOTS_MAX);
-
+mod clamp;
+pub use clamp::{Clamp, REFRESH_HZ_RANGE, RING_SLOTS_RANGE};
 /// 飞行记录配置（布局配置 JSON 的 `record` 段）。
 ///
 /// 记录写成 wp8f 自有的 `.wpr`（地图信息 + 底图 + N 组逐帧 CSV）；归一化地图坐标原样入档，
